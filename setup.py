@@ -25,14 +25,19 @@ setup(
   # installed or upgraded on the target machine
   install_requires = [
     'astropy',
+    'corner',
+    'h5py',
     'matplotlib',
     'numpy',
     'pandas',
-    'scipy'
+    'scipy',
+    'splat',
+    'statsmodels',
+    'tqdm',
   ],
 
   package_dir = {'ucdmcmc': 'ucdmcmc'},    
-  package_data = {'ucdmcmc': ['db/*']},
+  package_data = {'ucdmcmc': ['models/*']},
 #      'reference/Filters': [
 #        'reference/Filters/*.txt',
 #      ],
