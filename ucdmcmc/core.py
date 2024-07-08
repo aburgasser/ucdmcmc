@@ -688,11 +688,14 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 
 # best fit
 	mpar = {}
+	dpars = list(mdls.keys())
+	for x in ['flux']:
+		if x in dpars: dpars.remove(x)
 	ibest = numpy.argmin(mdls['chi'])
 	if verbose==True: print('Best fit model:')
-	for k in list(mdls.keys()): 
+	for k in dpars:
 		mpar[k] = mdls[k].iloc[ibest]
-		if verbose==True and k not in ['flux']: print('\t{} = {}'.format(k,mpar[k]))
+		if verbose==True: print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
 	comp.scale(mpar['scale'])
 #	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls['flux'].iloc[ibest])*mdls['scale'].iloc[ibest]*spscl.flux.unit)
@@ -890,10 +893,20 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			outfile = output_prefix+'_chains.pdf'
 			plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
-# best fit after revmoving burn
-	pvalsb = pvals[int(burn*nstep):]	
+# best fit after removing burn
+	pvalsb = pvals[int(burn*nstep):]
 	pbest = pvalsb[numpy.argmin(chis[int(burn*nstep):])]
+	for x in ['flux']:
+		if x in list(pbest.keys()): del pbest[x]
 	if verbose==True: print('Best parameters: {}'.format(pbest))
+
+# distribution of values
+	pdist = {}
+	dpars = copy.deepcopy(mkysfit)
+	for k in dpars:
+		if isinstance(pvalsb[0][k],str)==False: pdist[k] = numpy.nanquantile([p[k] for p in pvalsb],[0.16,0.5,0.84])
+	if absolute==True: 
+		pdist['radius'] = numpy.nanquantile([(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales[int(burn*nstep):]],[0.16,0.5,0.84])
 
 	if report == True:
 # remove initial burn and save
@@ -936,7 +949,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 		plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
 # return - might want to vary this up		
-	return pbest		
+	return {'best': pbest, 'distributions': pdist}		
 
 
 ########################################################################
