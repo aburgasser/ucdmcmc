@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ucdmcmc"
+version = "2024.07.08"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "astropy",
+    "astroquery",
+    "splat",
+    "scipy",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "importlib_resources; python_version < '3.7'",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.h5","*.csv"] # includes the data files in models/
