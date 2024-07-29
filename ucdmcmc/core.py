@@ -1,3 +1,45 @@
+"""
+
+	ucdmcmc
+
+	Package Description
+	-------------------
+
+	UCDMCMC performs spectral model fitting of cool stars, brown dwarfs, and exoplanets using predefined published grids.
+	Options are available to conduct straight grid fits (best fit among individual grids) and MCMC (interpolation between grids).
+	UCDMCMC makes heavy use of the SPLAT package, which must be installed separately from https://github.com/aburgasser/splat.
+	Please try the provided tutorial for examples of how to use UCDMCMC routines.
+
+	Pre-set models
+	--------------
+	UCDMCMC comes with the following models pre-loaded in the models/ folder:
+
+	* atmo20 - ATMO2020 model set from Phillips et al. (2020) bibcode: TBD
+	* atmo20pp - ATMO2020++ model set from Meisner et al. (2023) bibcode: TBD
+	* btdusty16 - BT-Dusty model set from TBD - SPEX-PRISM
+	* btsettl08 - BT-Settled model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A - SPEX-PRISM, JWST-NIRSPEC-PRISM
+	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024arXiv240200758M - SPEX-PRISM, JWST-NIRSPEC-PRISM
+	* drift - Drift model set from Witte et al. (2011) bibcode: 2011A&A...529A..44W - SPEX-PRISM
+	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024arXiv240200756M - SPEX-PRISM
+	* karalidi21 - Sonora Cholla model set from Karalidi et al. (2021) bibcode: 2021ApJ...923..269K - SPEX-PRISM, JWST-NIRSPEC-PRISM
+	* lowz - LOWZ model set from Meisner et al. (2021) bibcode: 2021ApJ...915..120M - SPEX-PRISM, JWST-NIRSPEC-PRISM
+	* sand24 - SAND model set from Alvardo et al. (2024) bibcode: TBD - SPEX-PRISM, JWST-NIRSPEC-PRISM
+	* sonora21 - Sonora Bobcat model set from Marley et al. (2021) bibcode: 2021ApJ...920...85M - SPEX-PRISM JWST-NIRSPEC-PRISM
+	* tremblin15 - Model set from Tremblin et al. (2015) bibcode: TBD
+
+	These are calculated for the following instruments:
+
+	* NIR: generic low resolution NIR range, covering 0.85-2.4 micron at ma edian resolution of 442
+	* SPEX-PRISM: IRTF SpeX PRISM mode, covering 0.65-2.56 micron at a median resolution of 423, using data from 
+		Burgasser et al. (2006) as a template
+	* JWST-NIRSPEC-PRISM: JWST NIRSPEC PRISM, covering 0.5--6 micron at a median resolution of 590, using data from 
+		Burgasser et al. (2024) as a template
+	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 0.83--13.5 micron at a median resolution of 400,
+		using data from Beiler et al. (2024) as a template
+
+
+"""
+
 # MCMC model fitting code
 import copy
 import corner
@@ -20,6 +62,17 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 #######################################################
+###############   INSTALLATION NOTES  #################
+#######################################################
+
+# git clone
+# cd ucdmcmc
+# python -m setup.py install
+
+# a check is that ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
+# altnerately ucdmcmc.modelInfo() returns models
+
+#######################################################
 #######################################################
 #################   INITIALIZATION  ###################
 #######################################################
@@ -27,7 +80,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '5 July 2024'
+VERSION = '24 July 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -65,12 +118,13 @@ DEFINED_INSTRUMENTS = {
 
 DEFINED_SPECTRAL_MODELS = {\
 	'atmo20': {'instruments': {}, 'name': 'ATMO2020', 'citation': 'Phillips et al. (2020)', 'bibcode': '', 'altname': ['atmos','phillips','phi20','atmos2020','atmos20','atmo2020','atmo20'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0,'kzz': 'CE','cld': 'LC','broad': 'A','ad': 1.0,'logpmin': -8, 'logpmax': 4}}, \
+    'atmo20pp': {'instruments': {}, 'name': 'ATMO2020++', 'citation': 'Meisner et al. (2023)', 'bibcode': '2023AJ....166...57M', 'altname': ['atmo','atmo++','meisner23','mei23','atmo2020++','atmo20++','atmos2020++','atmos20++'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0.0,'kzz': 4.0}}, \
 	'btdusty16': {'instruments': {}, 'name': 'BT Dusty 2016', 'citation': 'TBD', 'bibcode': '', 'altname': ['btdusty2016','dusty16','dusty2016','dusty-bt','bt-dusty','bt-dusty2016','btdusty','bt-dusty16','btd'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btsettl08': {'instruments': {}, 'name': 'BT Settl 2008', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['allard','allard12','allard2012','btsettl','btsettled','btsettl08','btsettl2008','BTSettl2008','bts','bts08'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'enrich': 0.}}, \
 	'burrows06': {'instruments': {}, 'name': 'Burrows et al. (2006)', 'citation': 'Burrows et al. (2006)', 'bibcode': '2006ApJ...640.1063B', 'altname': ['burrows','burrows2006'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
 	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024arXiv240200758M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 'f2'}}, \
 	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2}}, \
-	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': '2.0', 'co': 0.85}}, \
+	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': '2.0', 'co': 0.85}}, \
 	'saumon12': {'instruments': {}, 'name': 'Saumon et al. 2012', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12','saumon2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
@@ -111,30 +165,63 @@ if ERROR_CHECKING==True: print('Currently running in error checking mode')
 
 def checkName(ref,refdict,altref='altname',output=False,verbose=ERROR_CHECKING):
 	'''
-	Purpose: 
-		General usage program to check if a key is present in a dictionary, with the option to look through alternate names
 
-	Required Inputs:
-		:param ref: A string containing the reference for lumiosity/SpT relation, should be among the keys and alternate names in refdict
-		:param refdict: dictionary containing empirical relation information
+	Purpose
+	-------
 
-	Optional Inputs:
-		None
+	General usage program to check if a key is present in a dictionary, with the option to look through alternate names
 
-	Output:
-		A string containing SPLAT's default name for a given reference set, or False if that reference is not present
+	Parameters
+	----------
 
-	Example:
+	ref : str
+		A string that corresponds to the relevant key
 
-	>>> import splat
-	>>> print(splat.checkDict('filippazzo',splat.SPT_LBOL_RELATIONS))
-		filippazzo2015
-	>>> print(splat.checkDict('burgasser',splat.SPT_BC_RELATIONS))
-		False
+	refdict: dict
+		Dictionary for which to search for a key
+
+	altref = 'altname' : str
+		If present, and refdict is a dictionary of dictionaries, will check the altname keys of the embedded dictionaries
+		to identify alternate names
+
+	output = False : bool
+		Default returned value if key is missing
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns the correct key from the dictionary, or if missing the value specified by output
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('me',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	Could not find item me in input dictionary; try: ['atmo20', 'btdusty16', 'btsettl08', 'burrows06', 
+	'dback24', 'elfowl24', 'lowz', 'saumon12', 'sonora21', 'sand24']
+	False
+
+	Dependencies
+	------------
+		
+	copy
+
 	'''
-	refc = copy.deepcopy(ref)
 
 # check reference	
+	refc = copy.deepcopy(ref)
 	if not isinstance(refc,str): return output
 	for k in list(refdict.keys()):
 		if refc==k: output = k
@@ -153,26 +240,131 @@ def checkName(ref,refdict,altref='altname',output=False,verbose=ERROR_CHECKING):
 #######################################################
 #######################################################
 
-def compareSpec(f1,f2,unc,weights=[],verbose=ERROR_CHECKING):
+def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	'''
-	Main fitting function, computes chi square with optimal scale factor
+	
+	Purpose
+	-------
+
+	Compares two flux vectors and corresponding uncertainty vector and returns a qualitative measure of agreement.
+	Note that is assumed the  function, computes chi square with optimal scale factor
+
+	Parameters
+	----------
+
+	f1 : numpy.array
+		An array of floats corresponding to the first spectrum; this quantity should not have units
+
+	f2 : numpy.array
+		An array of floats corresponding to the second spectrum; this quantity should not have units
+
+	unc : numpy.array
+		An array of floats corresponding to the joint uncertainty; this quantity should not have units
+
+	weights = [] : numpy.array
+		An optional array of floats corresponding to the weighting of the flux values, with large values corresponding
+		to higher weights. Weights of zero do not contribute to the quality of fit. By default all weights are 1
+
+	stat = 'chi-square' : str
+		Statistic to quantify agreement. NOTE: CURRENTLY THIS IS ONLY CHI-SQUARE
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns three (3) floats: the statistic, the optimal relative scaling factor, and the degrees of freedom.
+	The scaling factor is defined such that f2 is multiplied to bring it to optimal agreement with f1
+	The degrees of freedom takes into account nan values in the fluxes and uncertainty, and weights set to zero
+
+	Example
+	-------
+
+	>>> import splat
+	>>> import ucdmcmc
+	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
+	>>> sp2.toWavelengths(sp1.wave)
+	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
+	(16279.746979311662, 0.9281232247150684, 561)
+
+	Dependencies
+	------------
+		
+	numpy
+
 	'''
 # weighting - can be used to mask bad pixels or weight specific regions
 	if len(weights)!=len(f1): wt = numpy.ones(len(f1))
 	else: wt=numpy.array(weights)
 # mask out bad pixels in either spectrum or uncertainty
-	w = numpy.where(numpy.logical_and(numpy.isnan(f1+f2+unc)==False,unc!=0))
+	w = numpy.where(numpy.logical_and(numpy.isnan(f1+f2+unc)==False,wt*unc!=0))
 	dof = len(f1[w])
 	if dof<=1: raise ValueError('Not enough flux or noise values are non-nan')
-# compute chi-square
+# compute chi-square - CURRENTLY ONLY OPTION
 	scl = numpy.nansum(wt[w]*f1[w]*f2[w]/(unc[w]**2))/numpy.nansum(wt[w]*(f2[w]**2)/(unc[w]**2))
 	chi = numpy.nansum(wt[w]*((f1[w]-scl*f2[w])**2)/(unc[w]**2))
 	return chi, scl, dof-1
 
 
-def resample(sp,wave,method='integrate',smooth=1,verbose=ERROR_CHECKING):
+def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING):
 	'''
-	Resamples a spectrum to a given wavelength grid with optional smoothing
+	
+	Purpose
+	-------
+
+	Resamples a spectrum onto a wavelength grid with optional smoothing
+
+	Parameters
+	----------
+
+	sp : splat.Spectrum class
+		splat Spectrum object to resample onto wave grid
+
+	wave : numpy.array or list
+		wave grid to resample spectrum onto; if unitted, this is converted to units of sp.wave, 
+		otherwise assumed to be the same units
+
+	method = 'integrate' : str
+		Method by which spectrum is resampled onto new wavelength grid; options are:
+		* 'integrate': flux in integrated across wach wavelength grid point (also 'int')
+		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
+		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
+		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
+		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
+
+
+STOPPED HERE
+
+
+	stat = 'chi-square' : str
+		Statistic to quantify agreement. NOTE: CURRENTLY THIS IS ONLY CHI-SQUARE
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns three (3) floats: the statistic, the optimal relative scaling factor, and the degrees of freedom.
+	The scaling factor is defined such that f2 is multiplied to bring it to optimal agreement with f1
+	The degrees of freedom takes into account nan values in the fluxes and uncertainty, and weights set to zero
+
+	Example
+	-------
+
+	>>> import splat
+	>>> import ucdmcmc
+	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
+	>>> sp2.toWavelengths(sp1.wave)
+	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
+	(16279.746979311662, 0.9281232247150684, 561)
+
+	Dependencies
+	------------
+		
+	numpy
+
 	'''
 # prepare wavelength grid
 	if splat.isUnit(wave): wv=wave.to(sp.wave.unit).value
@@ -206,12 +398,20 @@ def resample(sp,wave,method='integrate',smooth=1,verbose=ERROR_CHECKING):
 				if method.lower() in ['mean','mn','average','ave']:
 					flx[i] = numpy.nanmean(flx0[wn])
 					unc[i] = numpy.nanmean(unc0[wn])/((len(unc0[wn])-1)**0.5)
-				if method.lower() in ['weighted mean','wmn','weighted']:
+				elif method.lower() in ['weighted mean','wmn','weighted']:
 					wts = 1./unc0[wn]**2
 					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0[wn]))
 					flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
 					unc[i] = (numpy.nansum(wts*unc0[wn]**2)/numpy.nansum(wts))**0.5
 				elif method.lower() in ['integrate','int']:
+					wts = numpy.ones(len(wv0[wn]))
+					if cnt > 1: 
+						flx[i] = numpy.trapz(wts*flx0[wn],wv0[wn])/numpy.trapz(wts,wv0[wn])
+						unc[i] = (numpy.trapz(wts*unc0[wn]**2,wv0[wn])/numpy.trapz(wts,wv0[wn]))**0.5
+					else:
+						flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
+						unc[i] = (numpy.nansum(wts*unc0[wn]**2)/numpy.nansum(wts))**0.5
+				elif method.lower() in ['weighted integrate','wint']:
 					wts = 1./unc0[wn]**2
 					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0[wn]))
 					if cnt > 1: 
@@ -264,7 +464,11 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 	-------
 
 	>>> import ucdmcmc
-	>>> ucdmcmc.info('btsettl')
+	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+	ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+	'lowz'
+
+	>>> ucdmcmc.checkName('meisner',ucdmcmc.DEFINED_SPECTRAL_MODELS)
 
 	Model btsettl08:
 		Reference: Allard, F. et al. (2012, Philosophical Transactions of the Royal Society A, 370, 2765-2777)
