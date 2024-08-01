@@ -80,7 +80,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '24 July 2024'
+VERSION = '31 July 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -104,6 +104,7 @@ PARAMETER_PLOT_LABELS = {
 	'enrich':r'[$\alpha$/Fe]',
 	'co':'C/O',
 	'kzz':r'$\log\kappa_{zz}$ (cm$^2$/s)',
+	'fsed':r'$f_{sed}$',
 	'cld':'Cloud Model',
 	'ad':r'$\gamma$',
 	'radius':r'R (R$_\odot$)',
@@ -112,48 +113,49 @@ PARAMETER_PLOT_LABELS = {
 
 DEFINED_INSTRUMENTS = {
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'norders': 1, 'readnoise': 12, 'darkcurrent': 0.2, 'gain': 12, 'altname': ['SPEX','PRISM'], 'bibcode': '2003PASP..115..362R'},
-	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'pixelscale': 0.43*u.arcsec, 'disperser': 'prism', 'wave_range': [0.6,6.0]*u.Angstrom, 'slitwidth': 2.*u.arcsec, 'resolution': 100, 'norders': 1, 'readnoise': 3.8, 'darkcurrent': 0., 'gain': 1.9, 'altname': ['JWST-NIRSPEC'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'reader': ''},
+	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'pixelscale': 0.43*u.arcsec, 'disperser': 'prism', 'wave_range': [0.6,6.0]*u.Angstrom, 'slitwidth': 2.*u.arcsec, 'resolution': 100, 'norders': 1, 'readnoise': 3.8, 'darkcurrent': 0., 'gain': 1.9, 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'reader': ''},
+	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'pixelscale': 0.43*u.arcsec, 'disperser': 'prism', 'wave_range': [0.6,6.0]*u.Angstrom, 'slitwidth': 2.*u.arcsec, 'resolution': 100, 'norders': 1, 'readnoise': 3.8, 'darkcurrent': 0., 'gain': 1.9, 'altname': ['NIRSPEC-MIRI'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'reader': ''},
 	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'pixelscale': 0.123*u.arcsec, 'wave_range': [0.94,2.45]*u.micron, 'slitwidth': 0.55*u.arcsec, 'resolution': 2700, 'norders': 5, 'orders': [3,4,5,6,7], 'order_wave_range': [[0.94,1.06],[0.95,1.23],[1.13,1.48],[1.42,1.85],[1.88,2.46]],'readnoise': 15., 'darkcurrent': 0.13, 'gain': 3.8, 'altname': ['NIRES'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'instrument_bibcode': '2000SPIE.4008.1048M', 'reader': ''},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
-	'atmo20': {'instruments': {}, 'name': 'ATMO2020', 'citation': 'Phillips et al. (2020)', 'bibcode': '', 'altname': ['atmos','phillips','phi20','atmos2020','atmos20','atmo2020','atmo20'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0,'kzz': 'CE','cld': 'LC','broad': 'A','ad': 1.0,'logpmin': -8, 'logpmax': 4}}, \
-    'atmo20pp': {'instruments': {}, 'name': 'ATMO2020++', 'citation': 'Meisner et al. (2023)', 'bibcode': '2023AJ....166...57M', 'altname': ['atmo','atmo++','meisner23','mei23','atmo2020++','atmo20++','atmos2020++','atmos20++'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0.0,'kzz': 4.0}}, \
-	'btdusty16': {'instruments': {}, 'name': 'BT Dusty 2016', 'citation': 'TBD', 'bibcode': '', 'altname': ['btdusty2016','dusty16','dusty2016','dusty-bt','bt-dusty','bt-dusty2016','btdusty','bt-dusty16','btd'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
+	'atmo20': {'instruments': {}, 'name': 'ATMO2020', 'citation': 'Phillips et al. (2020)', 'bibcode': '2020A%26A...637A..38P', 'altname': ['atmos','phillips','phi20','atmos2020','atmos20','atmo2020','atmo20'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'kzz': 0.,'cld': 'LC','broad': 'A','ad': 1.0,'logpmin': -8, 'logpmax': 4}}, \
+	'atmo20pp': {'instruments': {}, 'name': 'ATMO2020++', 'citation': 'Meisner et al. (2023)', 'bibcode': '2023AJ....166...57M', 'altname': ['atmo','atmo++','meisner23','mei23','atmo2020++','atmo20++','atmos2020++','atmos20++'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0.0,'kzz': 4.0}}, \
+	'btdusty16': {'instruments': {}, 'name': 'BT Dusty 2016', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['btdusty2016','dusty16','dusty2016','dusty-bt','bt-dusty','bt-dusty2016','btdusty','bt-dusty16','btd'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btsettl08': {'instruments': {}, 'name': 'BT Settl 2008', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['allard','allard12','allard2012','btsettl','btsettled','btsettl08','btsettl2008','BTSettl2008','bts','bts08'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'enrich': 0.}}, \
 	'burrows06': {'instruments': {}, 'name': 'Burrows et al. (2006)', 'citation': 'Burrows et al. (2006)', 'bibcode': '2006ApJ...640.1063B', 'altname': ['burrows','burrows2006'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
-	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024arXiv240200758M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 'f2'}}, \
-	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2}}, \
-	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': '2.0', 'co': 0.85}}, \
-	'saumon12': {'instruments': {}, 'name': 'Saumon et al. 2012', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12','saumon2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
+	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024arXiv240200758M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
+	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
+	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 400., 'logg': 4.0, 'z': 0., 'cld': 'nc', 'kzz': 0.}}, \
+	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 2., 'co': 0.85}}, \
+	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
-	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
+	'tremblin15': {'instruments': {}, 'name': 'Tremblin et al. 2015', 'citation': 'Tremblin et al. 2015', 'bibcode': '2015ApJ...804L..17T', 'altname': ['tremblin','tre15','tremblin2015'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0, 'kzz': 8.0, 'ad': 1.20}}, \
+	# 'saumon12': {'instruments': {}, 'name': 'Saumon et al. 2012', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12','saumon2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'btcond': {'instruments': {}, 'name': 'BT Cond', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['dusty-cond','bt-cond','btc'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	# 'btnextgen': {'instruments': {}, 'name': 'BT NextGen', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['nextgen-bt','btnextgen','btn'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.}}, \
 	# 'btsettl15': {'instruments': {}, 'name': 'BT Settl 2015', 'citation': 'Allard et al. (2015)', 'bibcode': '2015A&A...577A..42B', 'altname': ['allard15','allard2015','btsettl015','btsettl2015','BTSettl2015','bts15'],  'default': {'teff': 1500., 'logg': 5.0, 'z': 0.}}, \
 	# 'cond01': {'instruments': {}, 'name': 'AMES Cond', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['cond','cond-ames','amescond'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
 	# 'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'dusty01': {'instruments': {}, 'name': 'AMES Dusty', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['dusty','dusty-ames','amesdusty'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
-	# 'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': '2.0', 'co': 0.85}}, \
 	# 'madhusudhan11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
 	# 'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
 	# 'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
 	# 'saumon08': {'instruments': {}, 'name': 'Saumon & Marley 2008', 'citation': 'Saumon & Marley 2008', 'bibcode': '2008ApJ...689.1327S', 'altname': ['sau08','saumon2008'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'sonora18': {'instruments': {}, 'name': 'Sonora Alpha', 'citation': 'Marley et al. (2018)', 'bibcode': 'marley_mark_2018_1309035', 'altname': ['marley','marley18','marley2018','sonora2018'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
-	# 'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4}}, \
 	# 'gerasimov20': {'instruments': {}, 'name': 'Gerasimov et al. 2020', 'citation': 'Gerasimov et al. (2020)', 'bibcode': '2020RNAAS...4..214G', 'altname': ['phxlowz','ger20'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
-	# 'tremblin16': {'instruments': {}, 'name': 'Tremblin et al. 2016', 'citation': 'Tremblin et al. 2016', 'bibcode': '2016ApJ...817L..19T', 'altname': ['tremblin','tre16','tremblin2016'], 'default': {'teff': 1300., 'logg': 5.0, 'z': 0.1, 'kzz': 6.0, 'ad': 1.05}}, \
 	# 'veyette': {'instruments': {}, 'name': 'Veyette et al. 2017', 'citation': 'Veyette et al. 2017', 'bibcode': '2017ApJ...851...26V', 'altname': ['veyette17','veyette2017'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0, 'carbon': 0.0, 'oxygen': 0.0}}, \
 }
 
 # welcome message on load in
 print('\n\nWelcome to the UCDMCMC spectral fitting code!')
-#print('This code is designed to conduct both grid and MCMC fitting of spectral data of ultracool dwarfs')
+print('This code is designed to conduct both grid and MCMC fitting of spectral data of ultracool dwarfs')
 print('You are currently using version {}\n'.format(VERSION))
 # print('If you make use of any features of this toolkit for your research, please remember to cite the SPLAT paper:')
 # print('\n{}; Bibcode: {}\n'.format(CITATION,BIBCODE))
 # print('If you make use of any spectra or models in this toolkit, please remember to cite the original source.')
-#print('Please report any errors are feature requests to our github page, {}\n\n'.format(GITHUB_URL))
+print('Please report any errors are feature requests to our github page, {}\n\n'.format(GITHUB_URL))
 if ERROR_CHECKING==True: print('Currently running in error checking mode')
 
 
@@ -713,7 +715,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,output_prefix=MODEL_FILE_PREFIX,
 	for i in range(len(dp)):
 		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
 		par = dict(dp.iloc[i])
-		mdl = spmdl.loadModel(**par)
+		mdl = spmdl.loadModel(**par,force=True)
 		mdlsm = resample(mdl,wv,smooth=smooth,method='integrate')
 		par['flux'] = mdlsm.flux.value
 		pars.append(par)
@@ -749,8 +751,9 @@ def getGridModel(mdls,par,wave,verbose=ERROR_CHECKING):
 # prep downselect
 	for k in kys:
 		if k in list(par.keys()): 
-			if k=='kzz': smdls = smdls[smdls[k]==str(par[k])]
-			else: smdls = smdls[smdls[k]==par[k]]
+			# if k=='kzz': smdls = smdls[smdls[k]==str(par[k])]
+			# else: 
+			smdls = smdls[smdls[k]==par[k]]
 	if len(smdls)==0: raise ValueError('No models match parameters {}'.format(par))
 	elif len(smdls)>1: 
 		if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
@@ -844,9 +847,10 @@ def getInterpModel(mdls,par0,wave,verbose=ERROR_CHECKING):
 	return splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
 
 
-def getModel(mdls,par,wave,verbose=ERROR_CHECKING):
+def getModel(mdls,par,wave,rescale=True,verbose=ERROR_CHECKING):
 	try: sp = getGridModel(mdls,par,wave,verbose=verbose)
 	except: sp = getInterpModel(mdls,par,wave,verbose=verbose)
+	if 'scale' in par and rescale==True: sp.scale(par['scale'])
 	return sp
 
 
@@ -901,7 +905,7 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 		mpar[k] = mdls[k].iloc[ibest]
 		if verbose==True: print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
-	comp.scale(mpar['scale'])
+#	comp.scale(mpar['scale'])
 #	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls['flux'].iloc[ibest])*mdls['scale'].iloc[ibest]*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
 #	dof = numpy.count_nonzero(~numpy.isnan(spscl.flux.value))-1
@@ -928,7 +932,7 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 
 
 DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05}
-def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,threshhold=0.5,pstep=DEFAULT_MCMC_STEPS,absolute=False,report=True,output_prefix='mcmcfit_',verbose=ERROR_CHECKING):
+def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,threshhold=0.5,nsample=-1,pstep=DEFAULT_MCMC_STEPS,absolute=False,report=True,output_prefix='mcmcfit_',verbose=ERROR_CHECKING):
 #	radius=numpy.nan,e_radius=numpy.nan,report=True):
 	'''
 	Fit spectrum to model grid using MCMC interpolation
@@ -999,7 +1003,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 	if absolute==True: ylabelpre='Absolute '
 
 # initialize MCMC
-	cmdl = getModel(mdls,p0,spscl.wave,verbose=verbose)
+	cmdl = getModel(mdls,p0,spscl.wave,rescale=False,verbose=verbose)
 	chi,scl,dof = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 	dof = dof-nparam
 	cmdl.scale(scl)
@@ -1023,7 +1027,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			pnew[k] = numpy.random.choice(vals)
 		pnew = pnew | pfitd
 		try:
-			cmdl = getModel(mdls,pnew,spscl.wave,verbose=verbose)
+			cmdl = getModel(mdls,pnew,spscl.wave,rescale=False,verbose=verbose)
 			if verbose==True: print(i,pnew)
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 			# if numpy.isnan(radius)==False and numpy.isnan(e_radius)==False:
@@ -1065,7 +1069,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			scales.append(scales[-1])
 			mdlflxs.append(mdlflxs[-1])
 # interim save
-		if interim>0 and i>0 and numpy.mod(i,interim)==0:
+		if interim>0 and i>0 and numpy.mod(i,interim)==0 and report==True:
 # save parameters
 			dpfit = pandas.DataFrame()
 			for k in mkys: 
@@ -1082,7 +1086,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			pbest = pvals[numpy.argmin(chis)]
 #			pbest['radius'] = (10.*u.pc*(scales[numpy.argmin(chis)]**0.5)).to(u.Rsun).value
 			cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-			cmdl.scale(scales[numpy.argmin(chis)])
+			if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
 			outfile = output_prefix+'_compare.pdf'
 			plotCompare(spscl,cmdl,outfile=outfile,clabel='Best {} model\n'.format(mset)+r'$\chi^2_r$='+'{:.1f}'.format(numpy.nanmin(chis)/dof),absolute=absolute,verbose=verbose)
 # plot cornerplot
@@ -1127,15 +1131,16 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 		dpfit.to_excel(outfile,index=False)
 # plot comparison
 		cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-		cmdl.scale(scales[numpy.argmin(chis)])
+		if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
 		label = '{} model '.format(mdls['model'].iloc[0])
 		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(chis[numpy.argmin(chis)]/dof)
 		label+='T={:.0f} '.format(pbest['teff'])
 		label+='logg={:.2f} '.format(pbest['logg'])
 		label+='z={:.2f} '.format(pbest['z'])
 		outfile = output_prefix+'_compare.pdf'
+		if nsample==-1: nsample = int(len(pvalsb)/10)
 		if verbose==True: print('Plotting best fit comparison to {}'.format(outfile))
-		plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+		plotCompareSample(spscl,mdls,pandas.DataFrame(pvalsb),nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 		plotpars = copy.deepcopy(mkysfit)
 		for k in plotpars:
@@ -1153,7 +1158,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 		plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
 # return - might want to vary this up		
-	return {'best': pbest, 'distributions': pdist}		
+	return {'best': pbest, 'distributions': pdist, 'chain': pandas.DataFrame(pvalsb)}
 
 
 ########################################################################
@@ -1188,6 +1193,63 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([2*sc for sc in scl])
+	ax2.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax2.set_xlabel(xlabel,fontsize=16)
+	ax2.set_ylabel(r'$\Delta$',fontsize=16)
+	ax2.tick_params(axis="x", labelsize=14)
+	ax2.tick_params(axis="y", labelsize=14)
+	plt.tight_layout()
+	if outfile!='': plt.savefig(outfile)
+	if verbose==True: plt.show()
+	return
+
+def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,outfile='',clabel='Comparison',scale=1.,absolute=False,verbose=ERROR_CHECKING):
+# set up
+	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
+	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
+	if absolute==True: ylabel='Absolute '+ylabel
+
+# first identify the best fit model
+	pbest = dict(chain.iloc[numpy.argmin(chain['chi'])])
+	cspec = getModel(models,pbest,sspec.wave)
+	if 'scale' not in list(chain.columns): cspec.scale(scale)
+#	cspec.scale(pbest['scale'])
+	diff = sspec.flux.value-cspec.flux.value
+
+# now identify the random sample
+	chainsub = chain[chain['chi']/numpy.nanmin(chain['chi'])<relchi]
+	nsamp = numpy.nanmin([nsample,len(chainsub)])
+	fluxes = [getModel(models,dict(chainsub.iloc[i]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
+	minflx = numpy.nanmin(fluxes,axis=0)
+	maxflx = numpy.nanmax(fluxes,axis=0)
+	if 'scale' not in list(chainsub.columns):
+		minflx = minflx*scale 
+		maxflx = maxflx*scale 
+
+# plot
+	plt.clf()
+	plt.figure(figsize=[8,7])
+	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [4,1]}, sharex=True)
+#	ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
+	for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
+	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
+	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
+	ax1.legend(fontsize=12)
+	ax1.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
+	scl = numpy.nanmax(cspec.flux.value)
+	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
+	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	ax1.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax1.set_ylabel(ylabel,fontsize=12)
+	ax1.tick_params(axis="x", labelsize=0)
+	ax1.tick_params(axis="y", labelsize=14)
+
+	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
+	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
+	scl = numpy.nanquantile(diff,[0.02,0.98])
+	ax2.set_ylim([scl[0]-0.5*(scl[1]-scl[0]),scl[1]+0.5*(scl[1]-scl[0])])
 	ax2.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
 	ax2.set_xlabel(xlabel,fontsize=16)
 	ax2.set_ylabel(r'$\Delta$',fontsize=16)
