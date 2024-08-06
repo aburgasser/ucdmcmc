@@ -51,7 +51,7 @@ import os
 import pandas
 from scipy.interpolate import griddata
 #from scipy.optimize import minimize,curve_fit
-#import scipy.stats as stats
+import scipy.stats as stats
 from tqdm import tqdm
 from astropy.io import fits
 from astropy.coordinates import SkyCoord, EarthLocation, CartesianRepresentation, CartesianDifferential, Galactic, Galactocentric
@@ -759,7 +759,7 @@ def getGridModel(mdls,par,wave,verbose=ERROR_CHECKING):
 		if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
 	flx = smdls['flux'].iloc[0]
 	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
-#	if 'scale' in list(par.keys()): mdl.scale(par['scale'])
+	if 'scale' in list(par.keys()): mdl.scale(par['scale'])
 	return mdl
 
 
@@ -895,23 +895,22 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 #	mdls['model'] = [mset]*len(mdls)
 
 # best fit
-	mpar = {}
+	mpar = dict(mdls.iloc[numpy.argmin(mdls['chi'])])
+	mpar['rchi'] = mpar['chi']/mpar['dof']
 	dpars = list(mdls.keys())
 	for x in ['flux']:
-		if x in dpars: dpars.remove(x)
-	ibest = numpy.argmin(mdls['chi'])
-	if verbose==True: print('Best fit model:')
-	for k in dpars:
-		mpar[k] = mdls[k].iloc[ibest]
-		if verbose==True: print('\t{} = {}'.format(k,mpar[k]))
+		if x in list(mpar.keys()): del mpar[x]
+	if verbose==True: 
+		print('Best fit model:')
+		for k in mpar:
+#			mpar[k] = mdls[k].iloc[ibest]
+			print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
 #	comp.scale(mpar['scale'])
 #	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls['flux'].iloc[ibest])*mdls['scale'].iloc[ibest]*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
 #	dof = numpy.count_nonzero(~numpy.isnan(spscl.flux.value))-1
-	rchi = mdls['chi'].iloc[ibest]/mdls['dof'].iloc[ibest]
-	mpar['rchi'] = rchi
-	if verbose==True: print('\treduced chi2 = {}'.format(rchi))
+	if verbose==True: print('\treduced chi2 = {}'.format(mpar['rchi']))
 	# sclstd = numpy.nanstd(diff.flux.value,ddof=1)/numpy.nanmax(spscl.flux.value)
 	# mpar['sclstd'] = sclstd
 
@@ -923,7 +922,7 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 # comparison plot		
 		outfile = output_prefix+'_compare.pdf'
 		label = '{} model '.format(mdls['model'].iloc[0])
-		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(rchi)
+		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(mpar['rchi'])
 		label+='T={:.0f} '.format(mpar['teff'])
 		label+='logg={:.2f} '.format(mpar['logg'])
 		label+='z={:.2f} '.format(mpar['z'])
@@ -932,7 +931,8 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 
 
 DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05}
-def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,threshhold=0.5,nsample=-1,pstep=DEFAULT_MCMC_STEPS,absolute=False,report=True,output_prefix='mcmcfit_',verbose=ERROR_CHECKING):
+def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,threshhold=0.5,nsample=-1,
+	pstep=DEFAULT_MCMC_STEPS,method='chidiff',absolute=False,report=True,output_prefix='mcmcfit_',verbose=ERROR_CHECKING):
 #	radius=numpy.nan,e_radius=numpy.nan,report=True):
 	'''
 	Fit spectrum to model grid using MCMC interpolation
@@ -969,7 +969,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 		if verbose==True: print('Running initial grid fit')
 		p0 = fitGrid(spc,mdls,absolute=absolute,report=False,verbose=verbose)
 		if 'flux' in list(p0.keys()): del p0['flux']
-#		if verbose==True: print('\nGrid fit parameters: {}'.format(p0))
+		if verbose==True: print('\nGrid fit parameters: {}'.format(p0))
 
 # validate steps
 	if verbose==True: print('Fitting the following parameters:')
@@ -1003,6 +1003,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 	if absolute==True: ylabelpre='Absolute '
 
 # initialize MCMC
+# SOMETHING IS WRONG HERE
 	cmdl = getModel(mdls,p0,spscl.wave,rescale=False,verbose=verbose)
 	chi,scl,dof = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 	dof = dof-nparam
@@ -1032,30 +1033,31 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 			# if numpy.isnan(radius)==False and numpy.isnan(e_radius)==False:
 			# 	chinew+=(((10.*u.pc*(scl**0.5)).to(u.Rsun).value-radius)/e_radius)**2
-			cmdl.scale(scl)
+			#if 'scale' not in list(pnew.keys()): cmdl.scale(scl)
 
-# compute statistic
-			st,chst = (chinew-chis[-1])/numpy.nanmin(chis),numpy.random.uniform(0,threshhold)
-#			st,chst = 2*scipy.stats.f.sf(chinew/chis[-1],dof,dof),numpy.random.uniform(0.5,1)
-#			st,chst = dof/(0.5*dof+chinew-chis[-1]),numpy.random.uniform(threshhold,1)
-#			if verbose==True: print(chinew,chis[-1],dof,st,chst)
+	# compute statistic
+			if method=='chidiff': st,chst = (chinew-chis[-1])/numpy.nanmin(chis),numpy.random.uniform(0,threshhold)
+			elif method=='survival': st,chst = 2*stats.f.sf(chinew/chis[-1],dof,dof),numpy.random.uniform(0.5,1)
+			elif method=='dofscale': st,chst = dof/(0.5*dof+chinew-chis[-1]),numpy.random.uniform(threshhold,1)
+			else: raise ValueError('Do not recognize statistical comparison {}; try chidiff, survival, or dofscale'.format(method))
+	#			if verbose==True: print(chinew,chis[-1],dof,st,chst)
 
 			if st<chst:
-# reset if we've wandered off
+	# reset if we've wandered off
 				if chinew>(1+2*threshhold)*numpy.nanmin(chis):
 					if verbose==True: print('RESETING TO BEST FIT')
 					pvals.append(pvals[numpy.argmin(chis)])
 					chis.append(chis[numpy.argmin(chis)])
 					scales.append(scales[numpy.argmin(chis)])
 					mdlflxs.append(mdlflxs[numpy.argmin(chis)])
-# criterion satisfied, make a move
+	# criterion satisfied, make a move
 				else:
 					if verbose==True: print('CHANGED PARAMETERS!')
 					pvals.append(pnew)
 					chis.append(chinew)
 					scales.append(scl)
 					mdlflxs.append(cmdl.flux.value)
-# criterion not satisfied, stay in place
+	# criterion not satisfied, stay in place
 			else:
 				pvals.append(pvals[-1])
 				chis.append(chis[-1])
@@ -1083,10 +1085,12 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			dpfit.to_excel(outfile,index=False)
 # plot comparison
 			if verbose==True: print('Saving interim plots')
-			pbest = pvals[numpy.argmin(chis)]
+			pbest = dict(dpfit.iloc[numpy.argmin(chis)])
 #			pbest['radius'] = (10.*u.pc*(scales[numpy.argmin(chis)]**0.5)).to(u.Rsun).value
-			cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-			if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
+			cmdl = getModel(mdls,pbest,spscl.wave,rescale=False,verbose=verbose)
+			print(scales[numpy.argmin(chis)],pbest['scale'],numpy.nanmax(cmdl.flux.value))
+			cmdl.scale(scales[numpy.argmin(chis)])
+			print(numpy.nanmax(cmdl.flux.value))
 			outfile = output_prefix+'_compare.pdf'
 			plotCompare(spscl,cmdl,outfile=outfile,clabel='Best {} model\n'.format(mset)+r'$\chi^2_r$='+'{:.1f}'.format(numpy.nanmin(chis)/dof),absolute=absolute,verbose=verbose)
 # plot cornerplot
@@ -1140,7 +1144,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 		outfile = output_prefix+'_compare.pdf'
 		if nsample==-1: nsample = int(len(pvalsb)/10)
 		if verbose==True: print('Plotting best fit comparison to {}'.format(outfile))
-		plotCompareSample(spscl,mdls,pandas.DataFrame(pvalsb),nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+		plotCompareSample(spscl,mdls,dpfit,nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 		plotpars = copy.deepcopy(mkysfit)
 		for k in plotpars:
@@ -1203,35 +1207,45 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	if verbose==True: plt.show()
 	return
 
-def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,outfile='',clabel='Comparison',scale=1.,absolute=False,verbose=ERROR_CHECKING):
+def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',outfile='',clabel='Comparison',scale=1.,absolute=False,verbose=ERROR_CHECKING):
 # set up
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
 	if absolute==True: ylabel='Absolute '+ylabel
+	if nsample<0: nsample = int(len(chain)/10)
 
 # first identify the best fit model
-	pbest = dict(chain.iloc[numpy.argmin(chain['chi'])])
+	pbest = dict(chain.iloc[numpy.argmin(chain['chis'])])
 	cspec = getModel(models,pbest,sspec.wave)
 	if 'scale' not in list(chain.columns): cspec.scale(scale)
 #	cspec.scale(pbest['scale'])
 	diff = sspec.flux.value-cspec.flux.value
 
 # now identify the random sample
-	chainsub = chain[chain['chi']/numpy.nanmin(chain['chi'])<relchi]
+	chainsub = chain[chain['chis']/numpy.nanmin(chain['chis'])<relchi]
 	nsamp = numpy.nanmin([nsample,len(chainsub)])
 	fluxes = [getModel(models,dict(chainsub.iloc[i]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
-	minflx = numpy.nanmin(fluxes,axis=0)
-	maxflx = numpy.nanmax(fluxes,axis=0)
-	if 'scale' not in list(chainsub.columns):
-		minflx = minflx*scale 
-		maxflx = maxflx*scale 
 
 # plot
 	plt.clf()
 	plt.figure(figsize=[8,7])
 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [4,1]}, sharex=True)
-#	ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
-	for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
+	if method=='minmax':
+		minflx = numpy.nanmin(fluxes,axis=0)
+		maxflx = numpy.nanmax(fluxes,axis=0)
+		if 'scale' not in list(chainsub.columns):
+			minflx = minflx*scale 
+			maxflx = maxflx*scale 
+		ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
+	elif method=='meanstd':
+		meanflx = numpy.nanmean(fluxes,axis=0)
+		stdflx = numpy.nanstd(fluxes,axis=0)
+		if 'scale' not in list(chainsub.columns):
+			meanflx = meanflx*scale 
+			stdflx = stdflx*scale 
+		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=0.2)
+	else:
+		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
 	ax1.legend(fontsize=12)
