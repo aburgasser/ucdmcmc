@@ -80,7 +80,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '7 August 2024'
+VERSION = '8 Aug 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'

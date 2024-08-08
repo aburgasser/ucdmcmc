@@ -37,7 +37,7 @@ setup(
   ],
 
   package_dir = {'ucdmcmc': 'ucdmcmc'},    
-  package_data = {'ucdmcmc': ['models/*']},
+  package_data = {'ucdmcmc': ['models/*','spectra/*']},
 #      'reference/Filters': [
 #        'reference/Filters/*.txt',
 #      ],
