@@ -1371,7 +1371,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 			plotpars.append('chis')
 			plotpars.append('scale')
 			outfile = file_prefix+'_chains.pdf'
-			plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
+			plotChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
 # remove burn in
 	pvalsb = pvals[int(burn*nstep):]
@@ -1435,7 +1435,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 		plotpars.append('scale')
 		outfile = file_prefix+'_chains.pdf'
 		if verbose==True: print('Plotting chain plot to {}'.format(outfile))
-		plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
+		plotChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
 # return depending on output keyword
 	if 'best' in output.lower(): return pbest
@@ -1450,12 +1450,15 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 # PLOTTING FUNCTIONS
 ########################################################################
 
+### NEED TO ADD LOG OPTION
 def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbose=ERROR_CHECKING):
 	diff = sspec.flux.value-cspec.flux.value
 
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
 	if absolute==True: ylabel='Absolute '+ylabel
+	strue = sspec.wave.value[numpy.isnan(sspec.flux.value)==False]
+	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
 
 	plt.clf()
 	plt.figure(figsize=[8,7])
@@ -1468,7 +1471,7 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
-	ax1.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax1.set_xlim(wrng)
 	ax1.set_ylabel(ylabel,fontsize=12)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14)
@@ -1478,7 +1481,7 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([2*sc for sc in scl])
-	ax2.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax2.set_xlim(wrng)
 	ax2.set_xlabel(xlabel,fontsize=16)
 	ax2.set_ylabel(r'$\Delta$',fontsize=16)
 	ax2.tick_params(axis="x", labelsize=14)
@@ -1488,11 +1491,14 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	if verbose==True: plt.show()
 	return
 
+### NEED TO ADD LOG OPTION
 def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',outfile='',clabel='Comparison',scale=1.,absolute=False,verbose=ERROR_CHECKING):
 # set up
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
 	if absolute==True: ylabel='Absolute '+ylabel
+	strue = sspec.wave.value[numpy.isnan(sspec.flux.value)==False]
+	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
 	if nsample<0: nsample = int(len(chain)/10)
 
 # first identify the best fit model
@@ -1535,7 +1541,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
-	ax1.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax1.set_xlim(wrng)
 	ax1.set_ylabel(ylabel,fontsize=12)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14)
@@ -1545,7 +1551,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([scl[0]-0.5*(scl[1]-scl[0]),scl[1]+0.5*(scl[1]-scl[0])])
-	ax2.set_xlim([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)])
+	ax2.set_xlim(wrng)
 	ax2.set_xlabel(xlabel,fontsize=16)
 	ax2.set_ylabel(r'$\Delta$',fontsize=16)
 	ax2.tick_params(axis="x", labelsize=14)
@@ -1555,18 +1561,26 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	if verbose==True: plt.show()
 	return
 
-def plotMCMCChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
+def plotChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
 	nplot = int(len(plotpars))
 	if nplot==0: 
 		if verbose==True: print('WARNING: no parameters to plot')
 		return
+# set up plot
 	plt.clf()
 	fig = plt.figure(figsize=[2*6,numpy.ceil(nplot/2)*3])
 	for i,l in enumerate(plotpars):	
 		ax = plt.subplot(int(numpy.ceil(nplot/2)),2,i+1)
 		ax.plot(dpfit[l],'k-')
+# indicate current best fit parameter		
 		if l in list(pbest.keys()): 
-			ax.plot(numpy.zeros(len(dpfit[l]))+pbest[l],'m--')
+			ax.plot(numpy.zeros(len(dpfit[l]))+pbest[l],'b--')
+# indicate best fit in chain		
+		if 'chis' in list(dpfit.keys()):
+			ax.plot(numpy.zeros(len(dpfit[l]))+dpfit[l].iloc[numpy.argmin(dpfit['chis'])],'m--')
+			ax.plot([numpy.argmin(dpfit['chis']),numpy.argmin(dpfit['chis'])],[numpy.nanmin(dpfit[l]),numpy.nanmax(dpfit[l])],'m--')
+			ax.set_title(dpfit[l].iloc[numpy.argmin(dpfit['chis'])])
+# labels and ticks
 		ax.set_xlabel('Step',fontsize=14)
 		if l in list(PARAMETER_PLOT_LABELS.keys()): ax.set_ylabel(PARAMETER_PLOT_LABELS[l],fontsize=14)
 		else: ax.set_ylabel(l,fontsize=14)
