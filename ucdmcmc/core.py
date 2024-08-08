@@ -1361,6 +1361,8 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 			plotpars = copy.deepcopy(mkysfit)
+			for k in plotpars:
+				if isinstance(mdls[k].iloc[0],str): plotpars.remove(k)
 			if absolute==True: plotpars.append('radius')
 			pltbest = [dpfit[x].iloc[numpy.argmin(dpfit['chis'])] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
@@ -1577,6 +1579,7 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
 			ax.plot(numpy.zeros(len(dpfit[l]))+pbest[l],'b--')
 # indicate best fit in chain		
 		if 'chis' in list(dpfit.keys()):
+#			print(l,dpfit[l].iloc[numpy.argmin(dpfit['chis'])])
 			ax.plot(numpy.zeros(len(dpfit[l]))+dpfit[l].iloc[numpy.argmin(dpfit['chis'])],'m--')
 			ax.plot([numpy.argmin(dpfit['chis']),numpy.argmin(dpfit['chis'])],[numpy.nanmin(dpfit[l]),numpy.nanmax(dpfit[l])],'m--')
 			ax.set_title(dpfit[l].iloc[numpy.argmin(dpfit['chis'])])
