@@ -34,7 +34,7 @@
 		Burgasser et al. (2006) as a template
 	* JWST-NIRSPEC-PRISM: JWST NIRSPEC PRISM, covering 0.5--6 micron at a median resolution of 590, using data from 
 		Burgasser et al. (2024) as a template
-	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 0.83--13.5 micron at a median resolution of 400,
+	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 0.83--13.5 micron at a median resolution of 150,
 		using data from Beiler et al. (2024) as a template
 
 
@@ -80,11 +80,12 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '31 July 2024'
+VERSION = '7 August 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
 MODEL_FOLDER = os.path.join(CODE_PATH,'models/')
+SPECTRA_FOLDER = os.path.join(CODE_PATH,'spectra/')
 MODEL_FILE_PREFIX = 'models_'
 WAVE_FILE_PREFIX = 'wave_'
 
@@ -110,12 +111,15 @@ PARAMETER_PLOT_LABELS = {
 	'radius':r'R (R$_\odot$)',
 	'chis':r'$\chi^2$',
 }
+DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0.05, 'kzz': 0.25, 'fsed': 0.25, 'ad': 0.01}
+
 
 DEFINED_INSTRUMENTS = {
-	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'norders': 1, 'readnoise': 12, 'darkcurrent': 0.2, 'gain': 12, 'altname': ['SPEX','PRISM'], 'bibcode': '2003PASP..115..362R'},
-	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'pixelscale': 0.43*u.arcsec, 'disperser': 'prism', 'wave_range': [0.6,6.0]*u.Angstrom, 'slitwidth': 2.*u.arcsec, 'resolution': 100, 'norders': 1, 'readnoise': 3.8, 'darkcurrent': 0., 'gain': 1.9, 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'reader': ''},
-	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'pixelscale': 0.43*u.arcsec, 'disperser': 'prism', 'wave_range': [0.6,6.0]*u.Angstrom, 'slitwidth': 2.*u.arcsec, 'resolution': 100, 'norders': 1, 'readnoise': 3.8, 'darkcurrent': 0., 'gain': 1.9, 'altname': ['NIRSPEC-MIRI'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'reader': ''},
-	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'pixelscale': 0.123*u.arcsec, 'wave_range': [0.94,2.45]*u.micron, 'slitwidth': 0.55*u.arcsec, 'resolution': 2700, 'norders': 5, 'orders': [3,4,5,6,7], 'order_wave_range': [[0.94,1.06],[0.95,1.23],[1.13,1.48],[1.42,1.85],[1.88,2.46]],'readnoise': 15., 'darkcurrent': 0.13, 'gain': 3.8, 'altname': ['NIRES'], 'wave_unit': u.micron, 'flux_unit': u.erg/u.s/u.cm/u.cm/u.micron, 'instrument_bibcode': '2000SPIE.4008.1048M', 'reader': ''},
+	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': [''], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
+	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
+	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
+	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024arXiv240708518B'},
+	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': '','sample_bibcode': ''},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -434,6 +438,68 @@ STOPPED HERE
 	return splat.Spectrum(wave=numpy.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
 
 
+# getSample
+def getSample(instrument='NIR',verbose=ERROR_CHECKING):
+	'''
+	Purpose
+	-------
+
+	Reads in one of the pre-set sample spectra
+
+	Parameters
+	----------
+
+	instrument = 'NIR' : string
+		Instrument sample to upload, must equal one of the keys or alternates in the DEFINED_INSTRUMENTS dictionary
+
+	verbose = False : bool [optional]
+		set to True to return verbose output, including listing all models 
+
+	Outputs
+	-------
+
+	Spectrum object of the stored sample spectrum
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> sp = ucdmcmc.getSample('JWST-NIRSPEC-PRISM')
+	>>> sp.info()
+
+	JWST-NIRSPEC-PRISM spectrum of UNCOVER 333436
+
+	If you use these data, please cite:
+	
+	bibcode: 2024ApJ...962..177B
+
+	History:
+		JWST-NIRSPEC-PRISM spectrum successfully loaded
+
+	Dependencies
+	------------
+		`checkName()`_
+		os
+		splat
+	'''	
+# check instrument name
+	inst = checkName(instrument,DEFINED_INSTRUMENTS,output='')	
+	if inst=='': 
+		raise ValueError('Instrument {} is not one of the defined instruments; try {}'.format(instrument,list(DEFINED_INSTRUMENTS.keys())))
+# does it have a sample?
+	if DEFINED_INSTRUMENTS[inst]['sample']=='':
+		raise ValueError('No sample spectrum defined yet for instrument {}'.format(instrument))
+# check for file
+	sfile = os.path.join(SPECTRA_FOLDER,DEFINED_INSTRUMENTS[inst]['sample'])
+	if os.path.exists(sfile)==False:
+		raise ValueError('Cannot find sample file {} for instrument {}; check the path and file name'.format(sfile,instrument))
+# read in a return
+	sp = splat.Spectrum(file=sfile,name=DEFINED_INSTRUMENTS[inst]['sample_name'],instrument=inst)
+	sp.published = 'Y'
+	sp.data_reference = DEFINED_INSTRUMENTS[inst]['sample_bibcode']
+	return sp
+
+
 
 #######################################################
 #######################################################
@@ -671,7 +737,7 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	return models, wave
 
 
-def generateModelSet(modelset,wave=DEFAULT_WAVE,output_prefix=MODEL_FILE_PREFIX,constraints={},smooth=1,save_wave=False,verbose=ERROR_CHECKING):
+def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,constraints={},smooth=1,save_wave=False,verbose=ERROR_CHECKING):
 	''' 
 	Generates the h5 files containing resampled models
 	'''
@@ -680,7 +746,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,output_prefix=MODEL_FILE_PREFIX,
 	if isinstance(mset,bool):
 		print('WARNING: Model set {} is not contained in SPLAT, cannot run this'.format(modelset))
 		return
-	outfile = output_prefix+'.h5'
+	outfile = file_prefix+'.h5'
 	if verbose==True: print('Processing {} models'.format(mset))
 
 # prepare wavelength grid
@@ -728,13 +794,13 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,output_prefix=MODEL_FILE_PREFIX,
 	if save_wave==True: 
 		dpw = pandas.DataFrame()
 		dpw['wave'] = wv
-		outfile = output_prefix+'_wave.csv'
+		outfile = file_prefix+'_wave.csv'
 		dpw.to_csv(outfile,index=False)
 		if verbose==True: print('Saving wavelength array to {}'.format(outfile))
 	return True
 
 
-def getGridModel(mdls,par,wave,verbose=ERROR_CHECKING):
+def getGridModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 	'''
 	Gets a specific model from a model set
 	'''	
@@ -759,11 +825,11 @@ def getGridModel(mdls,par,wave,verbose=ERROR_CHECKING):
 		if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
 	flx = smdls['flux'].iloc[0]
 	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
-	if 'scale' in list(par.keys()): mdl.scale(par['scale'])
+	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
 	return mdl
 
 
-def getInterpModel(mdls,par0,wave,verbose=ERROR_CHECKING):
+def getInterpModel(mdls,par0,wave,scale=True,verbose=ERROR_CHECKING):
 	'''
 	Generates an interpolated model from 
 	'''
@@ -823,9 +889,10 @@ def getInterpModel(mdls,par0,wave,verbose=ERROR_CHECKING):
 	mkys = copy.deepcopy(mkys0)
 	
 # prep models for griddata interpolation
+# note that we are taking the log of teff and co
 	fitvals,parvals = (),[]
 	for k in mkys:
-		if k=='teff': 
+		if k=='teff' or k=='co': 
 			fitvals+=tuple([[numpy.log10(x) for x in smdls[k]]])
 			parvals.append(numpy.log10(par[k]))
 		else:
@@ -844,13 +911,17 @@ def getInterpModel(mdls,par0,wave,verbose=ERROR_CHECKING):
 	flx = 10.**flx
 	if numpy.isnan(numpy.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par))
 #	print(truepar)
-	return splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
+
+# scale if desired
+	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
+	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
+	return mdl
 
 
-def getModel(mdls,par,wave,rescale=True,verbose=ERROR_CHECKING):
-	try: sp = getGridModel(mdls,par,wave,verbose=verbose)
-	except: sp = getInterpModel(mdls,par,wave,verbose=verbose)
-	if 'scale' in par and rescale==True: sp.scale(par['scale'])
+def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
+	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
+	except: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
+#	if 'scale' in par and rescale==True: sp.scale(par['scale'])
 	return sp
 
 
@@ -859,18 +930,99 @@ def getModel(mdls,par,wave,rescale=True,verbose=ERROR_CHECKING):
 ########################################################################
 
 
-def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolute=False,verbose=ERROR_CHECKING):
+def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=True,file_prefix='gridfit_',verbose=ERROR_CHECKING):
 	'''
-	Fit spectrum to model grid
-	assumes spectrum is already resampled to correct wavelength grid
+	Purpose
+	-------
+
+	Fit a spectrum to model grid, with optional constraints. This function uses a chi-square statistic and determines the
+	overall best fit model from a set of model fluxes. 
+
+	Parameters
+	----------
+
+	ref : spc
+		A Spectrum class object that contains the spectrum to be fit, assumed to be onthe same wavelength scale as the models
+
+	models: pandas DataFrame
+		A pandas DataFrame that is read in through `readModels()` or `getModelSet()` that contains the model parameters 
+		and associated flux arrays
+
+	contraints = {} : dict
+		Optional parameter constraints, with the keys corresponding to the model parametes associated with 2-element
+		arrays that specify the lower and upper limits. NOTE: currently only works with quantitative variables
+
+	output = 'parameters' : str
+		Specify what the program should return; options are:
+			* 'parameters' (DEFAULT): return a dict of the best-fit model parameters
+			* 'spectrum': return the spectrum of the best-fit model as a Spectrum class object
+			* 'allvalues': return the input models pandas DataFrame with the optimal scale factor, chi-square, 
+				and degrees of freedom added
+
+	absolute = True : bool
+		Set to True if spectrum fluxes are in absolute flux units (flux at 10 pc), such that the optimal scaling factor 
+		provides a realistic estimate of the radius
+
+	report = True : bool
+		Set to True to save an output file showing the best fit model
+
+	file_prefix = 'gridfit_' : str
+		Prefix to append to output file if report = True
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Determined by the `output` keyword; options are:
+		* 'parameters' (DEFAULT): return a dict of the best-fit model parameters
+		* 'spectrum': return the spectrum of the best-fit model as a Spectrum class object
+		* 'allvalues': return the input models pandas DataFrame with the optimal scale factor, chi-square, 
+			and degrees of freedom added
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> sp = ucdmcmc.getSample('JWST-NIRSPEC-PRISM')
+	>>> models,wave = ucdmcmc.getModelSet('elfowl24','JWST-NIRSPEC-PRISM')
+	>>> spsm = ucdmcmc.resample(sp,wave)
+	>>> par0 = ucdmcmc.fitGrid(spsm,models,verbose=True)
+
+	Best fit model:
+		model = elfowl24
+		co = 0.5
+		kzz = 2.0
+		logg = 5.0
+		teff = 1000.0
+		z = -0.0
+		scale = 1.387711853929069e-24
+		chi = 956.6257633740316
+		radius = 0.0005224902503080241
+		dof = 850.0
+		rchi = 1.1254420745576843
+		reduced chi2 = 1.1254420745576843
+
+	Dependencies
+	------------
+		
+	`compareSpec()`
+	`getGridModel()`
+	`plotCopmare()`
+	astropy.unit
+	copy
+	numpy
+	pandas
+
 	'''
 # make sure object spectrum is sampled to same wavelength scale as models
-	if len(spc.flux)!=len(omdls['flux'].iloc[0]):
+	if len(spc.flux)!=len(models['flux'].iloc[0]):
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
 # constrain models if needed
-	mdls = copy.deepcopy(omdls)
+	mdls = copy.deepcopy(models)
 	for k in list(constraints.keys()):
 		if k in list(mdls.columns):
 			if isinstance(mdls[k].iloc[0],str):
@@ -916,11 +1068,11 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 
 	if report == True:
 # save parameters
-		outfile = output_prefix+'_parameters.xlsx'
+		outfile = file_prefix+'_parameters.xlsx'
 		mdls.drop(columns=['flux'],inplace=True)
 		mdls.to_excel(outfile,index=False)
 # comparison plot		
-		outfile = output_prefix+'_compare.pdf'
+		outfile = file_prefix+'_compare.pdf'
 		label = '{} model '.format(mdls['model'].iloc[0])
 		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(mpar['rchi'])
 		label+='T={:.0f} '.format(mpar['teff'])
@@ -930,22 +1082,132 @@ def fitGrid(spc,omdls,constraints={},report=True,output_prefix='gridfit_',absolu
 	return mpar
 
 
-DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05}
-def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,threshhold=0.5,nsample=-1,
-	pstep=DEFAULT_MCMC_STEPS,method='chidiff',absolute=False,report=True,output_prefix='mcmcfit_',verbose=ERROR_CHECKING):
+def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,
+	burn=0.25,quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,file_prefix='mcmcfit_',verbose=ERROR_CHECKING):
 #	radius=numpy.nan,e_radius=numpy.nan,report=True):
 	'''
-	Fit spectrum to model grid using MCMC interpolation
-	assumes spectrum is already resampled to correct wavelength grid
-	'''
+	Purpose
+	-------
 
+	Fit a spectrum to model grid using a simple Metropolis-Hastings Markov Chain Monte Carlo methor. Conducts the fit
+	through model grid by interpolating (logarithmic) fluxes, and advances chains based on various chi-square comparison
+	statistics. Returns a variety of outputs depending on the output and report keywords.
+
+	Parameters
+	----------
+
+	ref : spc
+		A Spectrum class object that contains the spectrum to be fit, assumed to be onthe same wavelength scale as the models
+
+	models: pandas DataFrame
+		A pandas DataFrame that is read in through `readModels()` or `getModelSet()` that contains the model parameters 
+		and associated flux arrays
+
+	p0 = {} : dict
+		Dictionary containing the initial parameters; if not provided or some parameters missing, default parameters are
+		used from the DEFINED_SPECTRAL_MODELS parameter
+
+	contraints = {} : dict
+		Optional parameter constraints, with the keys corresponding to the model parametes associated with 2-element
+		arrays that specify the lower and upper limits. NOTE: currently only works with quantitative variables
+
+	output = 'all' : str
+		Specify what the function should return; options are:
+			* 'best': return a dict of the best-fit model parameters
+			* 'model': return the best fit model as a Spectrum class object
+			* 'distribution': return a dict of the model parameter distributions (25%, 50%, and 75% quantiles)
+			* 'chain': return the chain of parameter values as a pandas Dataframe
+			* 'all' (DEFAULT): returns a dict containing all three of the above 
+
+	pstep = DEFAULT_MCMC_STEPS : dict
+		Dictionary containing the parameter step scales. New parameers are selected by a normal distribution with the step
+		width, up to the parameter limits
+
+	nstep = 100 : int
+		Number of MCMC steps to take; ideally this should be 1000-10000+
+
+	iterim = 50 : int
+		If > 0 and report = True, this will iteratively save the chains and diagnostic plots on a cadence of iterim steps
+
+	method = 'chidiff' : str
+		The method by which the current (i) and previous (i-1) model fit chi2 values are compared; options are:
+			* 'chidiff' (DEFAULT): compare difference in chis to overall miniumum chi2: (chi2[i]-chi2[i-1])/min(chi2)
+			* 'survival': compute the F-test survival fraction for the ratio of chi2 values: SF(chi2[i]/chi2[i-1],dof,dof)
+			 (see scipy.stats.f)
+			* 'dofscale': compares the difference in chi2 values to the dof: dof/(0.5*dof+chi2[1]-chi2[-1])
+	treshhold = 0.5 : float
+		A scaling factor to determine the acceptance rate for new parameters, where the comparison statistic is compared to a
+		uniform draw between [0,threshhold] or [threshhold,1] (depending on the statistic)
+
+	burn = 0.25 : float
+		The fraction of the initial chain to remove before determining the final parameter distributions. Set to a low fraction
+		if you are starting with a good approximation of the model parameters
+
+	quantscale = [0.25,0.5,0.75] : list
+		List of three floats indicating the quantile scales to report for the parameter distributions
+
+	nsample = 0 : int
+		For the comparison plot, set to 0 to compare to the best fit model, or to a positive integer to compare to nsample models
+		drawn from the chain
+
+	absolute = True : bool
+		Set to True if spectrum fluxes are in absolute flux units (flux at 10 pc), such that the optimal scaling factor 
+		provides a realistic estimate of the radius
+
+	report = True : bool
+		Set to True to save both the chains and several diagnostic plots
+
+	file_prefix = 'mcmcfit_' : str
+		Prefix to append to output files if report = True
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Determined by the `output` keyword; options are:
+		* 'best': return a dict of the best-fit model parameters
+		* 'model': return the best fit model as a Spectrum class object
+		* 'distribution': return a dict of the model parameter distributions (25%, 50%, and 75% quantiles)
+		* 'chain': return the chain of parameter values as a pandas Dataframe
+		* 'all' (DEFAULT): returns a dict containing all three of the above 
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> sp = ucdmcmc.getSample('JWST-NIRSPEC-PRISM')
+	>>> models,wave = ucdmcmc.getModelSet('sonora21','JWST-NIRSPEC-PRISM')
+	>>> spsm = ucdmcmc.resample(sp,wave)
+	>>> par0 = ucdmcmc.fitGrid(spsm,models,verbose=False) # initial fit
+	>>> par = ucdmcmc.fitMCMC(spsm,models,p0=par0,nstep=1000,burn=0.25,verbose=False) # MCMC
+	>>> par['distributions']
+	{'co': array([0.54139703, 0.88476726, 1.25166873]),
+	  'kzz': array([2.17372842, 2.90277005, 3.99281996]),
+	  'logg': array([4.693938  , 5.10931096, 5.41861495]),
+	  'teff': array([ 976.68788945, 1033.00133369, 1090.21418499]),
+	  'z': array([-0.35613309, -0.12806126,  0.12211709])}
+
+	Dependencies
+	------------
+		
+	`compareSpec()`
+	`getGridModel()`
+	`plotCopmare()`
+	astropy.unit
+	copy
+	numpy
+	pandas
+
+	'''
 # make sure object spectrum is sampled to same wavelength scale as models
-	if len(spc.flux)!=len(omdls['flux'].iloc[0]):
+	if len(spc.flux)!=len(models['flux'].iloc[0]):
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
 # constrain models if needed
-	mdls = copy.deepcopy(omdls)
+	mdls = copy.deepcopy(models)
 	for k in list(constraints.keys()):
 		if k in list(mdls.columns):
 			if isinstance(mdls[k].iloc[0],str):
@@ -1004,7 +1266,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 
 # initialize MCMC
 # SOMETHING IS WRONG HERE
-	cmdl = getModel(mdls,p0,spscl.wave,rescale=False,verbose=verbose)
+	cmdl = getModel(mdls,p0,spscl.wave,scale=False,verbose=verbose)
 	chi,scl,dof = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 	dof = dof-nparam
 	cmdl.scale(scl)
@@ -1028,7 +1290,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			pnew[k] = numpy.random.choice(vals)
 		pnew = pnew | pfitd
 		try:
-			cmdl = getModel(mdls,pnew,spscl.wave,rescale=False,verbose=verbose)
+			cmdl = getModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
 			if verbose==True: print(i,pnew)
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 			# if numpy.isnan(radius)==False and numpy.isnan(e_radius)==False:
@@ -1037,7 +1299,7 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 
 	# compute statistic
 			if method=='chidiff': st,chst = (chinew-chis[-1])/numpy.nanmin(chis),numpy.random.uniform(0,threshhold)
-			elif method=='survival': st,chst = 2*stats.f.sf(chinew/chis[-1],dof,dof),numpy.random.uniform(0.5,1)
+			elif method=='survival': st,chst = 2*stats.f.sf(chinew/chis[-1],dof,dof),numpy.random.uniform(threshhold,1)
 			elif method=='dofscale': st,chst = dof/(0.5*dof+chinew-chis[-1]),numpy.random.uniform(threshhold,1)
 			else: raise ValueError('Do not recognize statistical comparison {}; try chidiff, survival, or dofscale'.format(method))
 	#			if verbose==True: print(chinew,chis[-1],dof,st,chst)
@@ -1070,99 +1332,118 @@ def fitMCMC(spc,omdls,p0={},constraints={},nstep=100,interim=50,burn=0.25,thresh
 			chis.append(chis[-1])
 			scales.append(scales[-1])
 			mdlflxs.append(mdlflxs[-1])
-# interim save
-		if interim>0 and i>0 and numpy.mod(i,interim)==0 and report==True:
+# iterim save
+		if iterim>0 and i>0 and numpy.mod(i,iterim)==0 and report==True:
 # save parameters
 			dpfit = pandas.DataFrame()
 			for k in mkys: 
-				vals = [p[k] for p in pvals]
-				dpfit[k] = vals
+				dpfit[k] = [p[k] for p in pvals]
 			dpfit['chis'] = chis
 			dpfit['dof'] = [dof]*len(dpfit)
 			dpfit['scale'] = scales
-			dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales]
-			outfile = output_prefix+'_parameters.xlsx'
+			dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in dpfit['scale']]
+			outfile = file_prefix+'_parameters.xlsx'
 			dpfit.to_excel(outfile,index=False)
 # plot comparison
-			if verbose==True: print('Saving interim plots')
-			pbest = dict(dpfit.iloc[numpy.argmin(chis)])
+			if verbose==True: print('Saving iterim plots')
+			pbest = dict(dpfit.iloc[numpy.argmin(dpfit['chis'])])
 #			pbest['radius'] = (10.*u.pc*(scales[numpy.argmin(chis)]**0.5)).to(u.Rsun).value
-			cmdl = getModel(mdls,pbest,spscl.wave,rescale=False,verbose=verbose)
-			print(scales[numpy.argmin(chis)],pbest['scale'],numpy.nanmax(cmdl.flux.value))
-			cmdl.scale(scales[numpy.argmin(chis)])
-			print(numpy.nanmax(cmdl.flux.value))
-			outfile = output_prefix+'_compare.pdf'
-			plotCompare(spscl,cmdl,outfile=outfile,clabel='Best {} model\n'.format(mset)+r'$\chi^2_r$='+'{:.1f}'.format(numpy.nanmin(chis)/dof),absolute=absolute,verbose=verbose)
+			cmdl = getModel(mdls,pbest,spscl.wave,scale=True,verbose=verbose)
+			# print(scales[numpy.argmin(chis)],pbest['scale'],numpy.nanmax(cmdl.flux.value))
+			# cmdl.scale(scales[numpy.argmin(chis)])
+			# print(numpy.nanmax(cmdl.flux.value))
+			label = '{} model '.format(mset)
+			label+=r'$\chi^2_r$='+'{:.1f}\n'.format(numpy.nanmin(chis)/dof)
+			label+='T={:.0f} '.format(pbest['teff'])
+			label+='logg={:.2f} '.format(pbest['logg'])
+			label+='z={:.2f} '.format(pbest['z'])
+			outfile = file_prefix+'_compare.pdf'
+			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 			plotpars = copy.deepcopy(mkysfit)
 			if absolute==True: plotpars.append('radius')
 			pltbest = [dpfit[x].iloc[numpy.argmin(dpfit['chis'])] for x in plotpars]
+# NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 			weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
-			outfile = output_prefix+'_corner.pdf'
+			outfile = file_prefix+'_corner.pdf'
 			plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
 # plot chains
 			plotpars.append('chis')
-			outfile = output_prefix+'_chains.pdf'
+			plotpars.append('scale')
+			outfile = file_prefix+'_chains.pdf'
 			plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
-# best fit after removing burn
+# remove burn in
 	pvalsb = pvals[int(burn*nstep):]
-	pbest = pvalsb[numpy.argmin(chis[int(burn*nstep):])]
+	dpfit = pandas.DataFrame()
+	for k in mkys: 
+		dpfit[k] = [p[k] for p in pvalsb]
+	dpfit['chis'] = chis[int(burn*nstep):]
+	dpfit['dof'] = [dof]*len(dpfit)
+	dpfit['scale'] = scales[int(burn*nstep):]
+	dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in dpfit['scale']]
+
+# best fit parameters
+	pbest = dict(dpfit.iloc[numpy.argmin(dpfit['chis'])])
+	pvalsb[numpy.argmin(chis[int(burn*nstep):])]
 	for x in ['flux']:
 		if x in list(pbest.keys()): del pbest[x]
 	if verbose==True: print('Best parameters: {}'.format(pbest))
+	cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
+	if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
 
 # distribution of values
 	pdist = {}
 	dpars = copy.deepcopy(mkysfit)
 	for k in dpars:
-		if isinstance(pvalsb[0][k],str)==False: pdist[k] = numpy.nanquantile([p[k] for p in pvalsb],[0.16,0.5,0.84])
+		if isinstance(pvalsb[0][k],str)==False: pdist[k] = numpy.nanquantile([p[k] for p in pvalsb],quantscale)
 	if absolute==True: 
-		pdist['radius'] = numpy.nanquantile([(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales[int(burn*nstep):]],[0.16,0.5,0.84])
+		pdist['radius'] = numpy.nanquantile([(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales[int(burn*nstep):]],quantscale)
 
 	if report == True:
 # remove initial burn and save
-		dpfit = pandas.DataFrame()
-		for k in mkys: 
-			vals = [p[k] for p in pvals]
-			dpfit[k] = vals[int(burn*nstep):]
-		dpfit['chis'] = chis[int(burn*nstep):]
-		dpfit['dof'] = [dof]*len(dpfit)
-		dpfit['scale'] = scales[int(burn*nstep):]
-		dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in dpfit['scale']]
-		outfile = output_prefix+'_parameters.xlsx'
+		outfile = file_prefix+'_parameters.xlsx'
 		if verbose==True: print('Saving database of prameters to {}'.format(outfile))
 		dpfit.to_excel(outfile,index=False)
 # plot comparison
-		cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-		if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
+		# cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
+		# if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
 		label = '{} model '.format(mdls['model'].iloc[0])
 		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(chis[numpy.argmin(chis)]/dof)
 		label+='T={:.0f} '.format(pbest['teff'])
 		label+='logg={:.2f} '.format(pbest['logg'])
 		label+='z={:.2f} '.format(pbest['z'])
-		outfile = output_prefix+'_compare.pdf'
-		if nsample==-1: nsample = int(len(pvalsb)/10)
+		outfile = file_prefix+'_compare.pdf'
 		if verbose==True: print('Plotting best fit comparison to {}'.format(outfile))
-		plotCompareSample(spscl,mdls,dpfit,nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+		if nsample<=0: 
+			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+		else:
+			plotCompareSample(spscl,mdls,dpfit,nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 		plotpars = copy.deepcopy(mkysfit)
 		for k in plotpars:
 			if isinstance(mdls[k].iloc[0],str): plotpars.remove(k)
 		if absolute==True: plotpars.append('radius')
 		pltbest = [dpfit[x].iloc[numpy.argmin(dpfit['chis'])] for x in plotpars]
+# NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 		weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
-		outfile = output_prefix+'_corner.pdf'
+		outfile = file_prefix+'_corner.pdf'
 		if verbose==True: print('Plotting corner plot to {}'.format(outfile))
 		plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
 # plot chains
 		plotpars.append('chis')
-		outfile = output_prefix+'_chains.pdf'
+		plotpars.append('scale')
+		outfile = file_prefix+'_chains.pdf'
 		if verbose==True: print('Plotting chain plot to {}'.format(outfile))
 		plotMCMCChains(dpfit,plotpars,outfile=outfile,verbose=verbose)
 
-# return - might want to vary this up		
-	return {'best': pbest, 'distributions': pdist, 'chain': pandas.DataFrame(pvalsb)}
+# return depending on output keyword
+	if 'best' in output.lower(): return pbest
+	elif 'spec' in output.lower(): return cmdl
+	elif 'dist' in output.lower(): return pdist
+	elif 'chain' in output.lower(): return pandas.DataFrame(pvalsb)
+	else:
+		return {'best': pbest, 'model': cmdl, 'distributions': pdist, 'chain': pandas.DataFrame(pvalsb)}
 
 
 ########################################################################
