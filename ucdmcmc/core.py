@@ -737,7 +737,7 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	return models, wave
 
 
-def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,constraints={},smooth=1,save_wave=False,verbose=ERROR_CHECKING):
+def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,constraints={},initial_instrument='RAW',method='integrate',smooth=1,save_wave=False,verbose=ERROR_CHECKING):
 	''' 
 	Generates the h5 files containing resampled models
 	'''
@@ -754,10 +754,10 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,co
 	else: wv = copy.deepcopy(wave)
 
 # load up RAW model parameters
-	mpars = spmdl.loadModelParameters(mset,instrument='RAW')['parameter_sets']
+	mpars = spmdl.loadModelParameters(mset,instrument=initial_instrument)['parameter_sets']
 	dp = pandas.DataFrame(mpars)
-	if dp['instrument'].iloc[0]!='RAW':
-		print('WARNING: No RAW models for set {} are available in SPLAT, cannot run this'.format(modelset))
+	if dp['instrument'].iloc[0]!=initial_instrument:
+		print('WARNING: No {} models for set {} are available in SPLAT, cannot run this'.format(initial_instrument,modelset))
 		return
 
 # make constraints if needed
@@ -782,7 +782,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,co
 		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
 		par = dict(dp.iloc[i])
 		mdl = spmdl.loadModel(**par,force=True)
-		mdlsm = resample(mdl,wv,smooth=smooth,method='integrate')
+		mdlsm = resample(mdl,wv,smooth=smooth,method=method)
 		par['flux'] = mdlsm.flux.value
 		pars.append(par)
 
