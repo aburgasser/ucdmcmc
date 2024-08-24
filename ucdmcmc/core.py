@@ -14,20 +14,20 @@
 	--------------
 	UCDMCMC comes with the following models pre-loaded in the models/ folder:
 
-	* atmo20 - ATMO2020 model set from Phillips et al. (2020) bibcode: TBD
-	* atmo20pp - ATMO2020++ model set from Meisner et al. (2023) bibcode: TBD
-	* btdusty16 - BT-Dusty model set from TBD - SPEX-PRISM
-	* btsettl08 - BT-Settled model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A - SPEX-PRISM, JWST-NIRSPEC-PRISM
-	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024arXiv240200758M - SPEX-PRISM, JWST-NIRSPEC-PRISM
-	* drift - Drift model set from Witte et al. (2011) bibcode: 2011A&A...529A..44W - SPEX-PRISM
-	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024arXiv240200756M - SPEX-PRISM
-	* karalidi21 - Sonora Cholla model set from Karalidi et al. (2021) bibcode: 2021ApJ...923..269K - SPEX-PRISM, JWST-NIRSPEC-PRISM
-	* lowz - LOWZ model set from Meisner et al. (2021) bibcode: 2021ApJ...915..120M - SPEX-PRISM, JWST-NIRSPEC-PRISM
-	* sand24 - SAND model set from Alvardo et al. (2024) bibcode: TBD - SPEX-PRISM, JWST-NIRSPEC-PRISM
-	* sonora21 - Sonora Bobcat model set from Marley et al. (2021) bibcode: 2021ApJ...920...85M - SPEX-PRISM JWST-NIRSPEC-PRISM
-	* tremblin15 - Model set from Tremblin et al. (2015) bibcode: TBD
+	* atmo20 - ATMO2020 model set from Phillips et al. (2020) bibcode: 2020A%26A...637A..38P
+	* atmo20pp - ATMO2020++ model set from Meisner et al. (2023) bibcode: 2023AJ....166...57M
+	* btdusty16 - BT-Dusty model set from TBD bibcode: TBD
+	* btsettl08 - BT-Settled model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A
+	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024arXiv240200758M
+	* drift - Drift model set from Witte et al. (2011) bibcode: 2011A&A...529A..44W
+	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024arXiv240200756M
+	* karalidi21 - Sonora Cholla model set from Karalidi et al. (2021) bibcode: 2021ApJ...923..269K
+	* lowz - LOWZ model set from Meisner et al. (2021) bibcode: 2021ApJ...915..120M
+	* sand24 - SAND model set from Alvardo et al. (2024) bibcode: 2024RNAAS...8..134A
+	* sonora21 - Sonora Bobcat model set from Marley et al. (2021) bibcode: 2021ApJ...920...85M
+	* tremblin15 - Model set from Tremblin et al. (2015) bibcode: 2015ApJ...804L..17T
 
-	These are calculated for the following instruments:
+	These are calculated for a subset of the following instruments:
 
 	* NIR: generic low resolution NIR range, covering 0.85-2.4 micron at ma edian resolution of 442
 	* SPEX-PRISM: IRTF SpeX PRISM mode, covering 0.65-2.56 micron at a median resolution of 423, using data from 
@@ -80,7 +80,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '8 Aug 2024'
+VERSION = '13 Aug 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -312,7 +312,7 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	chi = numpy.nansum(wt[w]*((f1[w]-scl*f2[w])**2)/(unc[w]**2))
 	return chi, scl, dof-1
 
-
+# NOTE: need to rework this using Johnson method
 def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING):
 	'''
 	
@@ -339,12 +339,8 @@ def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING
 		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
 		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
 
-
-STOPPED HERE
-
-
-	stat = 'chi-square' : str
-		Statistic to quantify agreement. NOTE: CURRENTLY THIS IS ONLY CHI-SQUARE
+	smooth = 1 : int
+		pixel scale over which to do additional (boxcar) smoothing
 
 	verbose = ERROR_CHECKING : bool
 		Set to True to return verbose output
@@ -352,12 +348,13 @@ STOPPED HERE
 	Outputs
 	-------
 	
-	Returns three (3) floats: the statistic, the optimal relative scaling factor, and the degrees of freedom.
-	The scaling factor is defined such that f2 is multiplied to bring it to optimal agreement with f1
-	The degrees of freedom takes into account nan values in the fluxes and uncertainty, and weights set to zero
+	Returns a spectrum object in which the orginal spectrum has been resampled onto the given wave grid, 
+	with additional smoothing if noted. 
 
 	Example
 	-------
+
+STOPPED HERE
 
 	>>> import splat
 	>>> import ucdmcmc
@@ -370,6 +367,8 @@ STOPPED HERE
 	------------
 		
 	numpy
+	splat
+	
 
 	'''
 # prepare wavelength grid
@@ -661,6 +660,9 @@ def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=ERROR
 	if cname not in list(dp.columns): cname = list(dp.columns)[0]
 	return numpy.array(dp[cname])*DEFAULT_WAVE_UNIT
 
+def getWave(**kwargs):
+	return readWave(**kwargs)
+
 def writeWave(wave,file='wave.csv',overwrite=True,verbose=ERROR_CHECKING):
 	'''
 	Writes wavelength array to file
@@ -688,16 +690,62 @@ def readModelSet(file,verbose=ERROR_CHECKING):
 
 def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE_PREFIX,wprefix=WAVE_FILE_PREFIX,info=False,verbose=ERROR_CHECKING):
 	'''
-	gets model set that is already saved and wavelength grid
-	'''	
-# any models available?
-	# allfiles = glob.glob(os.path.join(MODEL_FOLDER,'{}*.h5'.format(prefix)))
-	# allwfiles = glob.glob(os.path.join(MODEL_FOLDER,'{}*.csv'.format(prefix)))
-	# if len(allfiles)==0: 
-	# 	print('No stored model files available in ucdmcmc folder {}'.format(MODEL_FOLDER))
-	# 	return
+	Purpose
+	-------
 
-# list what provided models are available	
+	Loads in a saved model structure and corresponding wavelength grid. 
+
+	Parameters
+	----------
+
+	setname = '' : str
+		The name of the model set, or the full path to the .h5 file containing the model data
+
+	instrument = 'SPEX-PRISM': str
+		Name of the instrument for which the models and wavelength grid have been computed
+
+	wavefile = '': str
+		Name of the full file path for the wavelength grid
+
+	prefix = MODEL_FILE_PREFIX : str
+		Optional parameter providing the default file name prefix for .h5 model files
+
+	wprefix = WAVE_FILE_PREFIX : str
+		Optional parameter providing the default file name prefix for .csv wavelength files
+
+	info = False : bool
+		Set to True to report a summary of model parameters
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	TBD
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> models,wave = ucdmcmc.getModelSet('elfowl24','JWST-NIRSPEC-PRISM')
+	>>> models
+
+
+	Dependencies
+	------------
+		
+	`compareSpec()`
+	`getGridModel()`
+	`plotCopmare()`
+	astropy.unit
+	copy
+	numpy
+	pandas
+
+	'''
+
+# list the stored models that are available	
 	if info==True or setname=='':
 		modelInfo(model=setname)
 		return
@@ -711,7 +759,9 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 		instrument=((os.path.basename(file).split('_'))[-1]).replace('.h5','')
 	elif os.path.exists('{}{}_{}.h5'.format(prefix,setname,instrument))==True: 
 		file = '{}{}_{}.h5'.format(prefix,setname,instrument)
-	else: file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(prefix,setname,instrument))
+	else: 
+		file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(prefix,setname,instrument))
+	if verbose==True: print('Using model data file {}'.format(file))
 	if os.path.exists(file)==False:
 		print('WARNING: model set file for {} cannot be found, check your file name'.format(setname))
 		modelInfo()
@@ -721,7 +771,7 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	if wavefile!='':
 		if os.path.exists(wavefile)==True: wfile=copy.deepcopy(wavefile)
 		elif os.path.exists(os.path.join(MODEL_FOLDER,wavefile))==True: wfile=os.path.join(MODEL_FOLDER,wavefile)
-		else: raise ValueError('Could not located wavelength file {}'.format(wavefile))
+		else: raise ValueError('Could not locate wavelength file {}'.format(wavefile))
 	else: wfile = os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wprefix,instrument))
 	if os.path.exists(wfile)==False:
 		print('Could not located wavelength file {}'.format(wfile))
