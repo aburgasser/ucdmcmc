@@ -34,11 +34,19 @@
 		Burgasser et al. (2006) as a template
 	* JWST-NIRSPEC-PRISM: JWST NIRSPEC PRISM, covering 0.5--6 micron at a median resolution of 590, using data from 
 		Burgasser et al. (2024) as a template
-	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 0.83--13.5 micron at a median resolution of 150,
+	* JWST-NIRSPEC-G395H: JWST NIRSPEC G395H, covering 0.5--6 micron at a median resolution of 590, using data from 
+		Burgasser et al. (2024) as a template
+	* JWST-MIRI-LRS: JWST MIRI LRS, covering 4.55--13.5 micron at a median resolution of XXX,
+		using data from TBD as a template
+	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 2.8-5.2 micron at a median resolution of XXX,
 		using data from Beiler et al. (2024) as a template
 
 
 """
+
+# WHAT NEEDS TO BE DONE
+# - add in examples for JWST MIRI LRS and NIRSPEC G395H
+# - comparison plot with x and y log scales
 
 # MCMC model fitting code
 import copy
@@ -80,7 +88,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '13 Aug 2024'
+VERSION = '13 Sep 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -91,13 +99,15 @@ WAVE_FILE_PREFIX = 'wave_'
 
 # defaults
 DEFAULT_FLUX_UNIT = u.erg/u.s/u.cm/u.cm/u.micron
+DEFAULT_FLUX_NAME = 'flux'
 DEFAULT_WAVE_UNIT = u.micron
+DEFAULT_WAVE_NAME = 'wave'
 
 # baseline wavelength grid
 DEFAULT_WAVE_RANGE = [0.9,2.45]
 DEFAULT_RESOULTION = 300
 
-# other parameters
+# parameters
 PARAMETER_PLOT_LABELS = {
 	'teff':r'T$_{eff}$ (K)',
 	'logg':r'$\log{g}$ (cm/s$^2$)',
@@ -111,6 +121,22 @@ PARAMETER_PLOT_LABELS = {
 	'radius':r'R (R$_\odot$)',
 	'chis':r'$\chi^2$',
 }
+
+# parameters
+PARAMETERS = {
+	'teff': {'type': float,'label': r'T$_{eff}$ (K)','fmt': '{:.0f}','step':25,},
+	'logg': {'type': float,'label': r'$\log{g}$ (cm/s$^2$)','fmt': '{:.2f}','step':0.1,},
+	'z': {'type': float,'label': '[M/H]','fmt': '{:.2f}','step':0.1,},
+	'enrich': {'type': float,'label': r'[$\alpha$/Fe]','fmt': '{:.2f}','step':0.05,},
+	'co': {'type': float,'label': 'C/O','fmt': '{:.2f}','step':0.05,},
+	'kzz': {'type': float,'label': r'$\log\kappa_{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,},
+	'fsed': {'type': float,'label': r'$f_{sed}$','fmt': '{:.2f}','step':0.25,},
+	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,},
+	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,},
+	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,},
+	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,}
+}
+
 DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0.05, 'kzz': 0.25, 'fsed': 0.25, 'ad': 0.01}
 
 
@@ -118,8 +144,10 @@ DEFINED_INSTRUMENTS = {
 	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': [''], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
+	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
+	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024arXiv240708518B'},
-	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': '','sample_bibcode': ''},
+#	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': '','sample_bibcode': ''},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -239,6 +267,56 @@ def checkName(ref,refdict,altref='altname',output=False,verbose=ERROR_CHECKING):
 		if verbose==True: print('\nCould not find item {} in input dictionary; try: {}'.format(ref,list(refdict.keys())))
 	return output
 
+def isUnit(s):
+	'''
+
+	Purpose
+	-------
+
+	Checks if something is an astropy unit quantity; written in response to the many ways that astropy codes unit quantities
+
+	Parameters
+	----------
+
+	s : various
+		Quantity to check if unitted
+
+	Outputs
+	-------
+	
+	Returns True if unitted, False if not
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> import astropy.units as u
+	>>> ucdmcmc.isUnit(5)
+
+	False
+	
+	>>> ucdmcmc.isUnit(5*u.m)
+
+	True
+
+	>>> ucdmcmc.isUnit((5*u.m).value)
+
+	False
+
+	Dependencies
+	------------
+		
+	astropy.unit
+
+	'''
+
+	return isinstance(s,u.quantity.Quantity) or \
+		isinstance(s,u.core.Unit) or \
+		isinstance(s,u.core.CompositeUnit) or \
+		isinstance(s,u.core.IrreducibleUnit) or \
+		isinstance(s,u.core.NamedUnit) or \
+		isinstance(s,u.core.PrefixUnit)
+
 
 #######################################################
 #######################################################
@@ -313,7 +391,7 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	return chi, scl, dof-1
 
 # NOTE: need to rework this using Johnson method
-def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING):
+def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=numpy.nan,smooth=1,verbose=ERROR_CHECKING):
 	'''
 	
 	Purpose
@@ -327,9 +405,9 @@ def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING
 	sp : splat.Spectrum class
 		splat Spectrum object to resample onto wave grid
 
-	wave : numpy.array or list
-		wave grid to resample spectrum onto; if unitted, this is converted to units of sp.wave, 
-		otherwise assumed to be the same units
+	wave : numpy.ndarray or list
+		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
+		otherwise assumed to be in the units of `wave_unit`
 
 	method = 'integrate' : str
 		Method by which spectrum is resampled onto new wavelength grid; options are:
@@ -338,6 +416,9 @@ def resample(sp,wave,method='weighted integrate',smooth=1,verbose=ERROR_CHECKING
 		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
 		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
 		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
+
+	default_noise = numpy.nan : int or float
+		default noise value if not provided in noise array
 
 	smooth = 1 : int
 		pixel scale over which to do additional (boxcar) smoothing
@@ -366,19 +447,47 @@ STOPPED HERE
 	Dependencies
 	------------
 		
-	numpy
+	`isUnit()`
 	splat
 	
 
 	'''
-# prepare wavelength grid
-	if splat.isUnit(wave): wv=wave.to(sp.wave.unit).value
-	else: wv = copy.deepcopy(wave)
-	wshift = 2.*numpy.nanmedian(numpy.roll(wv,-1)-wv)
+# prepare input flux
+# 	if isUnit(flux): flx0=flux.to(flux_unit).value
+# 	else: flx0 = numpy.array(copy.deepcopy(flux))
+
+# # prepare input uncertainty
+# 	if isUnit(noise): unc0=noise.to(flux_unit).value
+# 	else: unc0 = numpy.array(copy.deepcopy(noise))
+# 	if len(noise)==0: 
+# 		if isUnit(default_noise): dns=default_noise.to(flux_unit).value
+# 		else: dns = numpy.array(copy.deepcopy(default_noise))
+# 		unc0 = numpy.array([dns]*len(flx0))
+
+# # prepare input wavelength grid
+# 	if isUnit(wave0): wv0=wave0.to(wave_unit).value
+# 	else: wv0 = numpy.array(copy.deepcopy(wave0))
+
+# prepare output wavelength grid
+	if isUnit(wave): wv=wave.to(sp.wave.unit).value
+	else: wv = numpy.array(copy.deepcopy(wave))
+	wshift = 2.*numpy.absolute(numpy.nanmedian(numpy.roll(wv,-1)-wv))
+
+
+# trim if necessary
+#	print(numpy.nanmin(sp.wave.value),numpy.nanmax(sp.wave.value),numpy.nanmin(wv),numpy.nanmax(wv))
+	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+#	print(numpy.nanmin(sp.wave.value),numpy.nanmax(sp.wave.value),len(sp.wave))
+	# wv0 = wv0[wtr]
+	# flx0 = flx0[wtr]
+	# unc0 = unc0[wtr]
+	# wtr = numpy.where(numpy.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
+	# if len(wv0[wtr])==0:
+	# 	raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(numpy.nanmin(wv0),numpy.nanmax(wv0),numpy.nanmin(wv),numpy.nanmax(wv)))
 
 # prepare spectrum object
-	spc = copy.deepcopy(sp)
-	spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+	# spc = copy.deepcopy(sp)
+	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
 
 # run interpolation
 	flx = [numpy.nan]*len(wv)
@@ -389,49 +498,54 @@ STOPPED HERE
 		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
 		else: wrng = [wv[i-smind],wv[i+smind]]
 		wsel = numpy.where(numpy.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
-		cnt = len(sp.flux[wsel])
+		cnt = len(sp.wave.value[wsel])
 # expand range
 		if cnt <= 1:
 			wsel = numpy.where(numpy.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
-			cnt = len(sp.flux[wsel])
+			cnt = len(sp.wave.value[wsel])
 		if cnt >= 1:
-			flx0 = sp.flux.value[wsel]
-			unc0 = sp.noise.value[wsel]
-			wv0 = sp.wave.value[wsel]			
-			wn = numpy.where(~numpy.isnan(flx0))
-			if len(flx0[wn])>0:
+			flx0s = sp.flux.value[wsel]
+			unc0s = sp.noise.value[wsel]
+			wv0s = sp.wave.value[wsel]
+			wn = numpy.where(~numpy.isnan(flx0s))
+			if len(flx0s[wn])>0:
 				if method.lower() in ['mean','mn','average','ave']:
-					flx[i] = numpy.nanmean(flx0[wn])
-					unc[i] = numpy.nanmean(unc0[wn])/((len(unc0[wn])-1)**0.5)
+					flx[i] = numpy.nanmean(flx0s[wn])
+					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = numpy.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
 				elif method.lower() in ['weighted mean','wmn','weighted']:
-					wts = 1./unc0[wn]**2
-					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0[wn]))
-					flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
-					unc[i] = (numpy.nansum(wts*unc0[wn]**2)/numpy.nansum(wts))**0.5
+					wts = 1./unc0s[wn]**2
+					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
+					flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
+					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
 				elif method.lower() in ['integrate','int']:
-					wts = numpy.ones(len(wv0[wn]))
+					wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0[wn],wv0[wn])/numpy.trapz(wts,wv0[wn])
-						unc[i] = (numpy.trapz(wts*unc0[wn]**2,wv0[wn])/numpy.trapz(wts,wv0[wn]))**0.5
+						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
 					else:
 						flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
-						unc[i] = (numpy.nansum(wts*unc0[wn]**2)/numpy.nansum(wts))**0.5
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
 				elif method.lower() in ['weighted integrate','wint']:
-					wts = 1./unc0[wn]**2
-					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0[wn]))
+					wts = 1./unc0s[wn]**2
+					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0[wn],wv0[wn])/numpy.trapz(wts,wv0[wn])
-						unc[i] = (numpy.trapz(wts*unc0[wn]**2,wv0[wn])/numpy.trapz(wts,wv0[wn]))**0.5
+						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
 					else:
-						flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
-						unc[i] = (numpy.nansum(wts*unc0[wn]**2)/numpy.nansum(wts))**0.5
+						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
 					# unc[i] = (numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
 					# flx[i] = numpy.trapz(flx0[wn],wv0[wn])/numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])
 # median by default
 				else:
-					flx[i] = numpy.nanmedian(flx0[wn])
-					unc[i] = flx[i]/numpy.nanmedian(flx0[wn]/unc0[wn])
+					flx[i] = numpy.nanmedian(flx0s[wn])
+					if isfinite(numpy.nanmax(unc0s))==True: unc[i] = flx[i]/numpy.nanmedian(flx0s[wn]/unc0s[wn])
+		# else:
+		# 	print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
 #					unc[i] = numpy.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
+
+# return flux
+	# return flx*flux_unit
 
 # return Spectrum object
 	return splat.Spectrum(wave=numpy.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
@@ -496,6 +610,7 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 	sp = splat.Spectrum(file=sfile,name=DEFINED_INSTRUMENTS[inst]['sample_name'],instrument=inst)
 	sp.published = 'Y'
 	sp.data_reference = DEFINED_INSTRUMENTS[inst]['sample_bibcode']
+	if verbose==True: print('Reading in sample spectrum for instrument {} of source {}'.format(inst,sp.name))
 	return sp
 
 
@@ -591,12 +706,12 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 		print('\tParameters:')
 		mpars,wave = getModelSet(availmodels[mdl]['files'][0])
 		kys = list(mpars.columns)
-		for x in ['model','flux']:
+		for x in ['model',DEFAULT_FLUX_NAME]:
 			if x in kys: kys.remove(x)
 		for k in kys:
 			vals = list(set(list(mpars[k])))
 			vals.sort()
-			if isinstance(mpars[k].iloc[0],float)==True:
+			if isinstance(mpars.loc[0,k],float)==True:
 				if len(vals)==1: print('\t\t{}: {}'.format(k,vals[0]))
 				else: print('\t\t{}: {} to {}'.format(k,numpy.nanmin(vals),numpy.nanmax(vals)))
 			else:
@@ -619,11 +734,11 @@ def generateWave(wave_range,wstep,method='resolution',verbose=ERROR_CHECKING):
 # prepare wavelength range
 	wunit = DEFAULT_WAVE_UNIT
 	if len(wave_range) != 2: raise ValueError('input wave length range must be a 2-element list or numpy array, you passed {}'.format(wave_range))
-	if splat.isUnit(wave_range): 
+	if isUnit(wave_range): 
 		wunit = wave_range.unit
 		wv=wave_range.value
-	if splat.isUnit(wave_range[0]):
-		wunit = wave_range.unit
+	if isUnit(wave_range[0]):
+		wunit = wave_range[0].unit
 		wv=[x.value for x in wave_range]
 	else: wv = copy.deepcopy(wave_range)
 
@@ -672,7 +787,7 @@ def writeWave(wave,file='wave.csv',overwrite=True,verbose=ERROR_CHECKING):
 		else:
 			if verbose==True: print('WARNING: overwriting wave file {}'.format(file))
 	dp = pandas.DataFrame()
-	if splat.isUnit(wave): dp['wave'] = wave.value
+	if isUnit(wave): dp['wave'] = wave.value
 	else: dp['wave'] = wave
 	dp.to_csv(file,index=False)
 	if verbose==True: print('Saved wavelength array to {}'.format(file))
@@ -688,7 +803,7 @@ def readModelSet(file,verbose=ERROR_CHECKING):
 	return pandas.read_hdf(file)
 
 
-def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE_PREFIX,wprefix=WAVE_FILE_PREFIX,info=False,verbose=ERROR_CHECKING):
+def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODEL_FILE_PREFIX,wave_prefix=WAVE_FILE_PREFIX,info=False,verbose=ERROR_CHECKING):
 	'''
 	Purpose
 	-------
@@ -698,7 +813,7 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	Parameters
 	----------
 
-	setname = '' : str
+	modelset = '' : str
 		The name of the model set, or the full path to the .h5 file containing the model data
 
 	instrument = 'SPEX-PRISM': str
@@ -707,10 +822,10 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	wavefile = '': str
 		Name of the full file path for the wavelength grid
 
-	prefix = MODEL_FILE_PREFIX : str
+	file_prefix = MODEL_FILE_PREFIX : str
 		Optional parameter providing the default file name prefix for .h5 model files
 
-	wprefix = WAVE_FILE_PREFIX : str
+	wave_prefix = WAVE_FILE_PREFIX : str
 		Optional parameter providing the default file name prefix for .csv wavelength files
 
 	info = False : bool
@@ -746,227 +861,524 @@ def getModelSet(setname='',instrument='SPEX-PRISM',wavefile='',prefix=MODEL_FILE
 	'''
 
 # list the stored models that are available	
-	if info==True or setname=='':
-		modelInfo(model=setname)
+	if info==True or modelset=='':
+		modelInfo(model=modelset)
 		return
 
 # construct expected file name and check it's there
-	if os.path.exists(setname)==True: 
-		file=copy.deepcopy(setname)
-		instrument=((os.path.basename(file).split('_'))[-1]).replace('.h5','')
-	elif os.path.exists(os.path.join(MODEL_FOLDER,setname))==True: 
-		file=os.path.join(MODEL_FOLDER,setname)
-		instrument=((os.path.basename(file).split('_'))[-1]).replace('.h5','')
-	elif os.path.exists('{}{}_{}.h5'.format(prefix,setname,instrument))==True: 
-		file = '{}{}_{}.h5'.format(prefix,setname,instrument)
+	if os.path.exists(modelset)==True: 
+		file=copy.deepcopy(modelset)
+	elif os.path.exists(os.path.join(MODEL_FOLDER,modelset))==True: 
+		file=os.path.join(MODEL_FOLDER,modelset)
+	elif os.path.exists('{}{}_{}.h5'.format(file_prefix,modelset,instrument))==True: 
+		file = '{}{}_{}.h5'.format(file_prefix,modelset,instrument)
 	else: 
-		file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(prefix,setname,instrument))
+		file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))
 	if verbose==True: print('Using model data file {}'.format(file))
 	if os.path.exists(file)==False:
-		print('WARNING: model set file for {} cannot be found, check your file name'.format(setname))
+		print('WARNING: model set file for {} cannot be found, check your file name'.format(modelset))
 		modelInfo()
 		raise ValueError
+	models = readModelSet(file,verbose=verbose)
 
 # read in appropriate wave file
+# NOTE: currently raises error of no wave file - could make this optional and not return a wave file
+	wfile = ''
 	if wavefile!='':
 		if os.path.exists(wavefile)==True: wfile=copy.deepcopy(wavefile)
-		elif os.path.exists(os.path.join(MODEL_FOLDER,wavefile))==True: wfile=os.path.join(MODEL_FOLDER,wavefile)
-		else: raise ValueError('Could not locate wavelength file {}'.format(wavefile))
-	else: wfile = os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wprefix,instrument))
+		elif os.path.exists(os.path.join(MODEL_FOLDER,wavefile))==True: 
+			wfile=os.path.join(MODEL_FOLDER,wavefile)
+		else: 
+			if verbose==True: print('WARNING: Could not locate wavelength file {}; going with instrument {}'.format(wavefile,instrument))
+	if wfile=='': 
+		wfile = os.path.join('{}{}.csv'.format(wave_prefix,instrument))
+		if os.path.exists(wfile)==False: 
+			wfile = os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument))
 	if os.path.exists(wfile)==False:
-		print('Could not located wavelength file {}'.format(wfile))
-		files = glob.glob(os.path.join(MODEL_FOLDER,'{}.csv'.format(wprefix)))
+		print('Could not locate wavelength file for {}; please pass a direct filename'.format(instrument))
+		files = glob.glob(os.path.join(MODEL_FOLDER,'{}.csv'.format(wave_prefix)))
 		if len(files) > 0: 
 			print('Available wavelength grids:')
 			for f in files: print('\t{}'.format(os.path.basename(f)))
 		raise ValueError
-
-# finally read in models and wave grid
-	models = readModelSet(file,verbose=verbose)
 	wave = readWave(wfile,verbose=verbose)
+
 	return models, wave
 
 
-def generateModelSet(modelset,wave=DEFAULT_WAVE,file_prefix=MODEL_FILE_PREFIX,constraints={},initial_instrument='RAW',method='integrate',smooth=1,save_wave=False,verbose=ERROR_CHECKING):
-	''' 
-	Generates the h5 files containing resampled models
+# generateModelSet
+def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},initial_instrument='RAW',
+	method='integrate',smooth=1,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
-# check name
-	mset = spmdl.checkSpectralModelName(modelset)
-	if isinstance(mset,bool):
-		print('WARNING: Model set {} is not contained in SPLAT, cannot run this'.format(modelset))
-		return
-	outfile = file_prefix+'.h5'
-	if verbose==True: print('Processing {} models'.format(mset))
+	Purpose
+	-------
 
-# prepare wavelength grid
-	if splat.isUnit(wave): wv = wave.to(DEFAULT_WAVE_UNIT).value
-	else: wv = copy.deepcopy(wave)
+	Generates a model set interpolated onto the provided wavelength range, with optional constraints.
+	This function requires access to a 'RAW' model grid either integrated into SPLAT or provided as an
+	input parameter.
 
-# load up RAW model parameters
-	mpars = spmdl.loadModelParameters(mset,instrument=initial_instrument)['parameter_sets']
-	dp = pandas.DataFrame(mpars)
-	if dp['instrument'].iloc[0]!=initial_instrument:
-		print('WARNING: No {} models for set {} are available in SPLAT, cannot run this'.format(initial_instrument,modelset))
-		return
+	Parameters
+	----------
+
+	modelset = '' : str
+		The name of the model set to generate, or optionally the full path to the folder containing the RAW model files
+
+	wave = DEFAULT_WAVE : str or list or numpy.ndarray
+		Either the name of the instrument that will serve as the baseline wavelength array, or the array 
+		of wavelengths to sample the spectra to, which can be of type list or numpy.ndarray and can be 
+		unitted or assumed to be in microns
+
+	contraints = {} : dict
+		Optional dictionary providing the parameters constraints to apply to the input models, the format of which
+		should be {'`key`': [`rng1`,`rng2`]} where `key` is the name of the parameter and `rng1` and `rng2` are
+		the lower and upper limits of the parameter range if quantitative. If the parameter is a fixed set of options
+		(e.g., cloud parameters), the list should contain all parameter values that you want included.
+
+	modelpars = {} : pandas.DataFrame or dict or str
+		Optional input providing the parameters corresponding to the input models. Format should be a 
+		pandas Dataframe with a "file" column listing the model filenames, then columns for each of the 
+		model parameters; or equivalent dict structure; or a .xslx or .csv file containing these parameters. 
+		If not provided, code will attempt to reconstruct model parameters from filename, but note this 
+		only works with SPLAT model file name conventions.
+		[NOTE: THIS IS CURRENTLY EXPERIMENTAL]
+
+	initial_instrument = 'RAW': str
+		Name of the instrument for which the models and wavelength grid should be computed; by default this
+		is 'RAW' 
+		[NOTE: THIS PARAMETER MAY BE OUT OF DATE]
+
+	method = 'integrate': str
+		The method by which to interpolate the origial model set onto the wavelength grid  (used by `resample`); options are:
+		* 'integrate': flux in integrated across wach wavelength grid point (also 'int'; DEFAULT)
+		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
+		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
+		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
+		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
+
+	smooth = 1 : int
+		pixel scale over which to do additional (boxcar) smoothing (used by `resample`)
+
+	file_prefix = MODEL_FILE_PREFIX : str
+		Optional parameter providing the default output file name prefix for the resulting .h5 model files
+
+	save_wave = False : bool
+		Set to True to save the wavelength grid to a separate file (wavelength is not stored in the h5 file)
+
+	wave_prefix = WAVE_FILE_PREFIX : str
+		If saving the wavelegnth grid, sets the file name prefix for .csv wavelength files
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns True of model generation was successful, otherwise returns an error message
+	Saves the model parameters and interpolated surface fluxes to the .h5 file corresponding to the provided file_prefix
+	Optionally saves the wavelength array (in micron) to the .csv file corresponding to the provided wave_prefix
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> modelset = 'morley12'
+	>>> instrument = 'JWST-NIRSPEC-PRISM'
+	>>> constraints = {'teff':[200,500],'logg':[4.5,5.5]}
+	>>> ucdmcmc.generateModelSet(modelset,instrument,constraints=constraints,file_prefix='testmodels_{}_{}'.format(modelset,instrument))
+
+	Dependencies
+	------------
+		
+	`readWave()`
+
+	`getGridModel()`
+	`plotCopmare()`
+	astropy.unit
+	copy
+	numpy
+	pandas
+
+	'''
+
+# wavelength grid
+# if a string, try reading in
+	if isinstance(wave,str):
+		wv = readWave(wave,verbose=verbose)
+# check if unitted and convert if so
+	elif isinstance(wave,list) or isinstance(wave,numpy.ndarray):
+		if isUnit(wave): wv = wave.to(DEFAULT_WAVE_UNIT).value
+		elif isUnit(wave[0]): wv = [w.to(DEFAULT_WAVE_UNIT).value for w in wave]
+		else: wv = copy.deepcopy(wave)
+		if len(wv) < 2:
+			print('Input wavelegnth array has only {:.0f} elements, not proceeding'.format(len(wv)))
+			return False
+# return if cannot process wave grid
+	else:
+		print('Unable to read wave input of type {}: convert to list or numpy array instead'.format(type(wave)))
+		return False
+
+# load up models and parameters
+# first check if this is a folder containing models
+	if os.path.isdir(modelset):
+		print('temporary holding place for reading in models from a folder')
+		return False
+
+# go through SPLAT path
+	else:
+# check modelset name
+		mset = spmdl.checkSpectralModelName(modelset)
+		if isinstance(mset,bool):
+			print('WARNING: Model set {} is not contained in SPLAT, cannot run this'.format(modelset))
+			return False
+		if verbose==True: print('Processing {} models'.format(mset))
+
+# read in model parameters
+		mpars = spmdl.loadModelParameters(mset,instrument=initial_instrument)['parameter_sets']
+		modelpars = pandas.DataFrame(mpars)
+# add in file name
+		modelpars['file'] = [os.path.join(splat.SPECTRAL_MODELS[mset]['instruments'][initial_instrument],spmdl.generateModelName(p)) for p in mpars]
+		if os.path.exists(modelpars.loc[0,'file'])==False:
+			modelpars['file'] = [os.path.join(splat.SPECTRAL_MODELS[mset]['instruments'][initial_instrument],spmdl.generateModelName(p)+'.gz') for p in mpars]
+			if os.path.exists(modelpars.loc[0,'file'])==False:
+				raise ValueError('Unable to find first model file name {}; check path',format(modelpars.loc[0,'file']))
+		# if modelpars.loc[0,'instrument']!=initial_instrument:
+		# 	print('WARNING: No {} models for set {} are available in SPLAT, cannot run this'.format(initial_instrument,modelset))
+		# 	return
 
 # make constraints if needed
 	for k in list(constraints.keys()):
-		if k in list(spmdl.SPECTRAL_MODEL_PARAMETERS.keys()) and k in list(dp.columns):
-			if spmdl.SPECTRAL_MODEL_PARAMETERS['teff']['type'] == 'continuous':
-				if verbose==True: print('Constaining {} to {}-{}'.format(k,constraints[k][0],constraints[k][1]))
-				dp = dp[dp[k]>=constraints[k][0]]
-				dp = dp[dp[k]<=constraints[k][1]]
-			else:
-				par = list(set(list(dp[k])))
+#		if k in list(spmdl.SPECTRAL_MODEL_PARAMETERS.keys()) and k in list(modelpars.columns):
+		if k in list(modelpars.columns):
+#			if spmdl.SPECTRAL_MODEL_PARAMETERS[k]['type'] == 'continuous':
+# discrete (string) variables
+			if isinstance(modelpars.loc[0,k],str)==True:
+				par = list(set(list(modelpars[k])))
 				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
 				for p in par:
-					if p not in constraints[k]: dp = dp[dp[k]!=p]
-# run the models
-	if verbose==True: print('Processing {:.0f} {} models'.format(len(dp),mset))
+					if p not in constraints[k]: 
+						modelpars = modelpars[modelpars[k]!=p]
+						modelpars.reset_index(inplace=True,drop=True)
+# continuous variables
+			else:
+				if verbose==True: print('Constaining {} to {} to {}'.format(k,constraints[k][0],constraints[k][1]))
+				modelpars = modelpars[modelpars[k]>=constraints[k][0]]
+				modelpars = modelpars[modelpars[k]<=constraints[k][1]]
+				modelpars.reset_index(inplace=True,drop=True)
+
+# read in and resample the models
+	if verbose==True: print('Processing {:.0f} {} models'.format(len(modelpars),mset))
 	pars = []
 # using a very dumbed down tqdm to save on memory issues	
-	step = int(len(dp)/10.)
+	step = numpy.ceil(len(modelpars)/10.)
 #	for i in tqdm(range(len(dp))):
-	for i in range(len(dp)):
+	for i in range(len(modelpars)):
 		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
-		par = dict(dp.iloc[i])
-		mdl = spmdl.loadModel(**par,force=True)
+		par = dict(modelpars.loc[i,:])
+# REPLACE THIS WITH REGULAR FILE READ
+		# mdl = spmdl.loadModel(**par,force=True)
+		mdl = splat.Spectrum(filename=modelpars.loc[i,'file'])
+#		par[flux_name] = resample(mdl.flux,mdl.wave,wv,smooth=smooth,method=method)
 		mdlsm = resample(mdl,wv,smooth=smooth,method=method)
-		par['flux'] = mdlsm.flux.value
+		par[flux_name] = mdlsm.flux.value
 		pars.append(par)
 
 # save the models
+	outfile = file_prefix+'.h5'
 	dpo = pandas.DataFrame(pars)
-	del dpo['instrument']
+	for x in ['instrument']:
+		if x in list(dpo.columns): del dpo[x]
 	if verbose==True: print('Saving {} models to {}'.format(mset,outfile))
 	dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
 	if save_wave==True: 
 		dpw = pandas.DataFrame()
 		dpw['wave'] = wv
-		outfile = file_prefix+'_wave.csv'
+		outfile = wave_prefix+'.csv'
 		dpw.to_csv(outfile,index=False)
 		if verbose==True: print('Saving wavelength array to {}'.format(outfile))
 	return True
 
 
-def getGridModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
+# getGridModel()
+def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbose=ERROR_CHECKING):
 	'''
-	Gets a specific model from a model set
-	'''	
+	Purpose
+	-------
+
+	Gets a specific model from a model set.
+
+	Parameters
+	----------
+
+	models : pandas.DataFrame
+		Dataframe containing the model parameters and fluxes
+
+	par : dict
+		Dictionary specifying the parameters of the grid model desired. The format is 
+		{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
+		have the same type as the parameter values in the models dataframe.
+
+	wave = [] : list or numpy.ndarray
+		Array of wavelengths that corresponds to the flux values, and must have the same length as the
+		flux values. Can be unitted or is assumed to be in microns
+
+	flux_name = DEFAULT_FLUX_NAME : str
+		Column name in which the flux values are specified in the models dataframe
+
+	scale = True : bool
+		Set to True if a `scale` parameter is included in par and should be used to scale the fluxes
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns a Spectrum object containing the wavelength and model flux values, optionally scaled.
+	If the wave parameter is not included or of a different length than the fluxe array, returns 
+	just the flux array.
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> models,wave = ucdmcmc.getModels('dback24','SPEX-PRISM')
+	>>> par = {'fsed': 4.0, 'logg': 5.00, 'teff': 1000.0, 'z': 0.5}
+	>>> mdl = ucdmcmc.getGridModel(models,par,wave=wave)
+	>>> mdl.name
+
+	dback24 model: fsed=4.0 logg=5.0 teff=1000.0 z=0.5
+	
+	>>> par = {'logg': 5.00, 'teff': 1000.0, 'z': 0.5}
+	>>> mdl = ucdmcmc.getGridModel(models,par,wave=wave)
+	>>> mdl.name
+
+	dback24 model
+	
+	6 models statisfy criteria, returning the first one
+	dback24 model: fsed=2.0 logg=5.0 teff=1000.0 z=0.5
+
+
+	Dependencies
+	------------
+		
+	`isUnit()`
+	`plotCopmare()`
+	copy
+	pandas
+	splat.Spectrum
+
+	'''
 # prep wavelegngth array
-	if splat.isUnit(wave)==False: wv = wave*DEFAULT_WAVE_UNIT
+	if isUnit(wave)==False: wv = wave*DEFAULT_WAVE_UNIT
 	else: wv = wave.to(DEFAULT_WAVE_UNIT)
 
 # prep downselect
-	kys = list(mdls.keys())
-	for x in ['model','flux']:
+	kys = list(models.columns)
+	for x in ['model',flux_name,'file']:
 		if x in kys: kys.remove(x)
-	smdls = copy.deepcopy(mdls)
+	smdls = copy.deepcopy(models)
 
-# prep downselect
+# do downselect
 	for k in kys:
 		if k in list(par.keys()): 
 			# if k=='kzz': smdls = smdls[smdls[k]==str(par[k])]
 			# else: 
 			smdls = smdls[smdls[k]==par[k]]
+			smdls.reset_index(inplace=True,drop=True)
 	if len(smdls)==0: raise ValueError('No models match parameters {}'.format(par))
 	elif len(smdls)>1: 
 		if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
-	flx = smdls['flux'].iloc[0]
-	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
+	flx = smdls.loc[0,flux_name]
+	name = '{} model: '.format(models.loc[0,'model'])
+# NEED TO ADD - FORMAT STRING FROM PARAMETERS
+	for x in kys: 
+		name=name+'{}={} '.format(x,smdls.loc[0,x])
+	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name=name)
 	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
+	mdl.parameters = dict(smdls.loc[0,:])
+	for x in [flux_name,'file']:
+		if x in list(mdl.parameters.keys()): del mdl.parameters[x]
 	return mdl
 
 
-def getInterpModel(mdls,par0,wave,scale=True,verbose=ERROR_CHECKING):
+def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,defaults={},verbose=ERROR_CHECKING):
 	'''
-	Generates an interpolated model from 
+	Purpose
+	-------
+
+	Takes a set of models and generates and interpolated model over provided parameters, using 
+	log flux interpolation
+
+	Parameters
+	----------
+
+	models : pandas.DataFrame
+		Dataframe containing the model parameters and fluxes
+
+	par : dict
+		Dictionary specifying the parameters of the interpolated model desired. The format is 
+		{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
+		have the same type as the parameter values in the model's dataframe. Any parameters not
+		provided will be assumed to have the default values from DEFINED_SPECTRAL_MODELS
+
+	wave = [] : list or numpy.ndarray
+		Array of wavelengths that corresponds to the flux values, and must have the same length as the
+		flux values. Can be unitted or is assumed to be in microns
+
+	flux_name = DEFAULT_FLUX_NAME : str
+		Column name in which the flux values are specified in the models dataframe
+
+	scale = True : bool
+		Set to True if a `scale` parameter is included in par and should be used to scale the fluxes
+
+	defaults = {} : dict
+		Dictionary specifying the default parameters to assume if not constrained by par. This keyword
+		is really a catch if making us of models that are not part of the defined ucdmcmc package,
+		and the default behavior is to use the `default` dictionary provided for each model in
+		DEFINED_SPECTRAL_MODELS
+
+		Set to True if a `scale` parameter is included in par and should be used to scale the fluxes
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns a Spectrum object containing the wavelength and model flux values, optionally scaled.
+	If model cannot be successfully interpolated (out of range parameters), a ValueError is raised. 
+	If the wave parameter is not included or of a different length than the fluxe array, returns 
+	just the flux array.
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> models,wave = ucdmcmc.getModels('dback24','SPEX-PRISM')
+	>>> par = {'fsed': 4.0, 'logg': 5.20, 'teff': 1150.0, 'z': 0.3}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+	>>> mdl.name
+
+	dback24 model: fsed=4.0 logg=5.2 teff=1150.0 z=0.3
+
+	>>> par = {'logg': 5.20, 'teff': 1150.0}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+
+	dback24 model: logg=5.2 teff=1150.0 fsed=2.0 z=-0.0
+
+	>>> par = {'fsed': 4.0, 'logg': 5.20, 'teff': 350.0, 'z': 0.3}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+
+	ValueError: No model satisfies parameter selection (failed at teff = 350.0)
+
+	Dependencies
+	------------
+		
+	`isUnit()`
+	`plotCopmare()`
+	copy
+	pandas
+	splat.Spectrum
+
 	'''
 # prep wavelength array
-	if splat.isUnit(wave)==False: wv = wave*DEFAULT_WAVE_UNIT
+	if isUnit(wave)==False: wv = wave*DEFAULT_WAVE_UNIT
 	else: wv = wave.to(DEFAULT_WAVE_UNIT)
 
-# get model information
-	mset = spmdl.checkSpectralModelName(mdls['model'].iloc[0])
-	if not isinstance(mset,bool): defaults = splat.SPECTRAL_MODELS[mset]['default']
-	else: raise ValueError('Model set {} not set up in splat'.format(mdls['model'].iloc[0]))
 
-# prep partial downslelect
-	smdls = copy.deepcopy(mdls)
-	mkys = list(mdls.keys())
-	for x in ['model','flux']:
-		if x in mkys: mkys.remove(x)
-	par = copy.deepcopy(par0)
+# get model defaults
+	if len(defaults) == 0:
+		mset = checkName(models.loc[0,'model'],DEFINED_SPECTRAL_MODELS,output=False)
+		if not isinstance(mset,bool): defaults = DEFINED_SPECTRAL_MODELS[mset]['default']		
+#	
+
+# check all model parameters are provided in set parameters or defaults
+	par0 = copy.deepcopy(par)
+	kys = list(models.columns)
+	for x in ['model',flux_name,'file']:
+		if x in kys: kys.remove(x)
+	for k in kys:
+# if parameter not provided, use defaults or bail out
+		if k not in list(par0.keys()):
+			if k not in list(defaults.keys()):
+				raise ValueError('Model parameter {} is not defined for input parameters or defaults; must specify all parameters'.format(k))
+			par0[k] = defaults[k]
+
+# downselect models or bail out if we're outside parameter range
+	smdls = copy.deepcopy(models)
 	limits,steps = {},{}
 
-# downselect or bail out if we're outside parameter range
-	for k in mkys:
+	for k in kys:
 		vals = list(set(list(smdls[k])))
 		vals.sort()
-		if k in list(par.keys()):
-			# if k=='kzz' and isinstance(truepar[k],str)==False: 
-			# 	smdls = smdls[smdls[k]=='{:.1f}'.format(truepar[k])]
-			if isinstance(smdls[k].iloc[0],str)==True: 
-				if par[k] not in vals:
-					if verbose==True: print('WARNING: input value {} for parameter {} not in model set, using default value {} instead'.format(par[k],k,defaults[k]))
-					par[k] = default[k]
-				smdls = smdls[smdls[k]==par[k]]
-			else:
+# discrete parameters - match exactly		
+		if isinstance(smdls.loc[0,k],str)==True: 
+			if par0[k] not in vals:
+				raise ValueError('Parameter {} = {} is not among values in models: {}'.format(k,par0[k],vals))
+			smdls = smdls[smdls[k]==par0[k]]
+			smdls.reset_index(inplace=True,drop=True)
+		else:
+# continuous parameters			
 #				print(par[k],numpy.nanmin(vals),numpy.nanmax(vals)) 
-				if par[k]<numpy.nanmin(vals) or par[k]>numpy.nanmax(vals):
-					raise ValueError('Parameter {} = {} outside range of models: {} to {}'.format(k,par[k],numpy.nanmin(vals),numpy.nanmax(vals)))
+			if par0[k] in vals:
+				smdls = smdls[smdls[k]==par0[k]]
+				smdls.reset_index(inplace=True,drop=True)
+			else:
 				valstep = numpy.absolute(numpy.array(vals)-numpy.roll(vals,1))
 				step = numpy.nanmedian(valstep[1:])				
-				limits[k] = [numpy.nanmax([numpy.nanmin(smdls[k]),par[k]-step]),numpy.nanmin([numpy.nanmax(smdls[k]),par[k]+step])]
+				limits[k] = [numpy.nanmax([numpy.nanmin(smdls[k]),par0[k]-step]),numpy.nanmin([numpy.nanmax(smdls[k]),par0[k]+step])]
 				if step>0:
 					smdls = smdls[smdls[k]>=limits[k][0]]
 					smdls = smdls[smdls[k]<=limits[k][1]]													 
-		else: 
-			smdls = smdls[smdls[k]==defaults[k]]
-			par[k] = defaults[k]
-#		if verbose==True: print(k,list(set(list(smdls[k]))),len(smdls))
-		if len(smdls)==0: raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par[k]))
-#	mkys = list(limits.keys())
-#	print(smdls)
+					smdls.reset_index(inplace=True,drop=True)
+# overselected - no models to interpolate
+		if len(smdls)==0: 
+			raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par0[k]))
 	
 # eliminate degenerate parameters
-	mkys0 = copy.deepcopy(mkys)
-	for k in mkys:
+	kys0 = copy.deepcopy(kys)
+	for k in kys:
 		if len(set(list(smdls[k])))<2: 
-			mkys0.remove(k)
-			par[k] = smdls[k].iloc[0]
-	mkys = copy.deepcopy(mkys0)
+			kys0.remove(k)
+			par0[k] = smdls.loc[0,k]
+	kys = copy.deepcopy(kys0)
 	
 # prep models for griddata interpolation
 # note that we are taking the log of teff and co
 	fitvals,parvals = (),[]
-	for k in mkys:
+	for k in kys:
 		if k=='teff' or k=='co': 
 			fitvals+=tuple([[numpy.log10(x) for x in smdls[k]]])
-			parvals.append(numpy.log10(par[k]))
+			parvals.append(numpy.log10(par0[k]))
 		else:
 			fitvals+=tuple([list(smdls[k])])
-			parvals.append(par[k])
+			parvals.append(par0[k])
 	parvals = numpy.array([parvals])
 	fitvals = numpy.transpose(numpy.vstack(fitvals))
 
 # run interpolation
 	flx = []
-	for i in range(len(smdls['flux'].iloc[0])):
-		fs = [numpy.log10(x[i]) for x in smdls['flux']]
+	for i in range(len(smdls.loc[0,flux_name])):
+		fs = [numpy.log10(x[i]) for x in smdls[flux_name]]
 		try: flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
-		except: raise ValueError('Insufficient model coverage; try reducing parameter constraints')
+		except: 
+			if verbose==True: print('getInterpModel failed for values '.format)
+			raise ValueError('Insufficient model coverage; try reducing parameter constraints')
 	flx = numpy.array(flx)
 	flx = 10.**flx
-	if numpy.isnan(numpy.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par))
+	if numpy.isnan(numpy.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
 #	print(truepar)
 
-# scale if desired
-	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name='{} model'.format(mdls['model'].iloc[0]))
+# turn into Spectrum and scale if desired
+	name = '{} model: '.format(models.loc[0,'model'])
+# NEED TO ADD - FORMAT STRING FROM PARAMETERS
+	for x in list(par0.keys()): 
+		name=name+'{}={} '.format(x,par0[x])
+	mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name=name)
 	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
+	mdl.parameters = par0
 	return mdl
-
 
 def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
@@ -980,7 +1392,8 @@ def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 ########################################################################
 
 
-def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=True,file_prefix='gridfit_',verbose=ERROR_CHECKING):
+def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parameters',absolute=False,
+	report=True,xscale='linear',yscale='linear',file_prefix='gridfit_',verbose=ERROR_CHECKING):
 	'''
 	Purpose
 	-------
@@ -1012,6 +1425,12 @@ def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=
 	absolute = True : bool
 		Set to True if spectrum fluxes are in absolute flux units (flux at 10 pc), such that the optimal scaling factor 
 		provides a realistic estimate of the radius
+
+	xscale = 'linear' : str
+		Scaling of the x-axis, based on the options in matplotlib.set_xscale()
+
+	yscale = 'linear' : str
+		Scaling of the y-axis, based on the options in matplotlib.set_xscale()
 
 	report = True : bool
 		Set to True to save an output file showing the best fit model
@@ -1067,7 +1486,7 @@ def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=
 
 	'''
 # make sure object spectrum is sampled to same wavelength scale as models
-	if len(spc.flux)!=len(models['flux'].iloc[0]):
+	if len(spc.flux)!=len(models.loc[0,flux_name]):
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
@@ -1075,7 +1494,7 @@ def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=
 	mdls = copy.deepcopy(models)
 	for k in list(constraints.keys()):
 		if k in list(mdls.columns):
-			if isinstance(mdls[k].iloc[0],str):
+			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
 				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
 				for p in par:
@@ -1088,28 +1507,28 @@ def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=
 # run through each grid point
 	for x in ['scale','chi','radius','dof']: mdls[x] = [numpy.nan]*len(mdls)
 	for jjj in range(len(mdls)):
-		chi,scl,dof = compareSpec(spscl.flux.value,numpy.array(mdls['flux'].iloc[jjj]),spscl.noise.value,verbose=verbose)
-		mdls['chi'].iloc[jjj] = chi
-		mdls['scale'].iloc[jjj] = scl
-		mdls['dof'].iloc[jjj] = dof
+		chi,scl,dof = compareSpec(spscl.flux.value,numpy.array(mdls.loc[jjj,flux_name]),spscl.noise.value,verbose=verbose)
+		mdls.loc[jjj,'chi'] = chi
+		mdls.loc[jjj,'scale'] = scl
+		mdls.loc[jjj,'dof'] = dof
 # radius scaling assuming spectrum is in absolute flux units
-		mdls['radius'].iloc[jjj] = (10.*u.pc*(scl**0.5)).to(u.Rsun).value
+		mdls.loc[jjj,'radius'] = (10.*u.pc*(scl**0.5)).to(u.Rsun).value
 #	mdls['model'] = [mset]*len(mdls)
 
 # best fit
-	mpar = dict(mdls.iloc[numpy.argmin(mdls['chi'])])
+	mpar = dict(mdls.loc[numpy.argmin(mdls['chi']),:])
 	mpar['rchi'] = mpar['chi']/mpar['dof']
 	dpars = list(mdls.keys())
-	for x in ['flux']:
+	for x in [flux_name]:
 		if x in list(mpar.keys()): del mpar[x]
 	if verbose==True: 
 		print('Best fit model:')
 		for k in mpar:
-#			mpar[k] = mdls[k].iloc[ibest]
+#			mpar[k] = mdls.loc[ibest,k]
 			print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
 #	comp.scale(mpar['scale'])
-#	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls['flux'].iloc[ibest])*mdls['scale'].iloc[ibest]*spscl.flux.unit)
+#	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls.loc[ibest,flux_name])*mdls.loc[ibest,'scale']*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
 #	dof = numpy.count_nonzero(~numpy.isnan(spscl.flux.value))-1
 	if verbose==True: print('\treduced chi2 = {}'.format(mpar['rchi']))
@@ -1119,21 +1538,23 @@ def fitGrid(spc,models,constraints={},output='parameters',absolute=False,report=
 	if report == True:
 # save parameters
 		outfile = file_prefix+'_parameters.xlsx'
-		mdls.drop(columns=['flux'],inplace=True)
+		mdls.drop(columns=[flux_name],inplace=True)
 		mdls.to_excel(outfile,index=False)
 # comparison plot		
 		outfile = file_prefix+'_compare.pdf'
-		label = '{} model '.format(mdls['model'].iloc[0])
+		label = '{} model '.format(mdls.loc[0,'model'])
 		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(mpar['rchi'])
 		label+='T={:.0f} '.format(mpar['teff'])
 		label+='logg={:.2f} '.format(mpar['logg'])
 		label+='z={:.2f} '.format(mpar['z'])
-		plotCompare(spscl,comp,outfile=outfile,clabel=label,absolute=absolute)
+		plotCompare(spscl,comp,outfile=outfile,clabel=label,absolute=absolute,xscale=xscale,yscale=yscale)
 	return mpar
 
 
-def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,
-	burn=0.25,quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,file_prefix='mcmcfit_',verbose=ERROR_CHECKING):
+def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='all',
+	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,
+	quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,xscale='linear',yscale='linear',
+	file_prefix='mcmcfit_',verbose=ERROR_CHECKING):
 #	radius=numpy.nan,e_radius=numpy.nan,report=True):
 	'''
 	Purpose
@@ -1200,6 +1621,12 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 		For the comparison plot, set to 0 to compare to the best fit model, or to a positive integer to compare to nsample models
 		drawn from the chain
 
+	xscale = 'linear' : str
+		Scaling of the x-axis, based on the options in matplotlib.set_xscale()
+
+	yscale = 'linear' : str
+		Scaling of the y-axis, based on the options in matplotlib.set_xscale()
+
 	absolute = True : bool
 		Set to True if spectrum fluxes are in absolute flux units (flux at 10 pc), such that the optimal scaling factor 
 		provides a realistic estimate of the radius
@@ -1252,7 +1679,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 
 	'''
 # make sure object spectrum is sampled to same wavelength scale as models
-	if len(spc.flux)!=len(models['flux'].iloc[0]):
+	if len(spc.flux)!=len(models.loc[0,flux_name]):
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
@@ -1260,18 +1687,21 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 	mdls = copy.deepcopy(models)
 	for k in list(constraints.keys()):
 		if k in list(mdls.columns):
-			if isinstance(mdls[k].iloc[0],str):
+			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
 				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
 				for p in par:
-					if p not in constraints[k]: mdls = mdls[mdls[k]!=p]
+					if p not in constraints[k]: 
+						mdls = mdls[mdls[k]!=p]
+						mdls.reset_index(inplace=True,drop=True)
 			else:
 				if verbose==True: print('Constaining {} to {}-{}'.format(k,constraints[k][0],constraints[k][1]))
 				mdls = mdls[mdls[k]>=constraints[k][0]]
 				mdls = mdls[mdls[k]<=constraints[k][1]]
-	mset = mdls['model'].iloc[0]
+				mdls.reset_index(inplace=True,drop=True)
+	mset = mdls.loc[0,'model']
 	mkys = list(mdls.keys())
-	for x in ['model','flux']:
+	for x in ['model',flux_name]:
 		if x in mkys: mkys.remove(x)
 
 # if no or incomplete fit parameters, conduct an initial grid fit
@@ -1280,7 +1710,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 	if chk==False:
 		if verbose==True: print('Running initial grid fit')
 		p0 = fitGrid(spc,mdls,absolute=absolute,report=False,verbose=verbose)
-		if 'flux' in list(p0.keys()): del p0['flux']
+		if flux_name in list(p0.keys()): del p0[flux_name]
 		if verbose==True: print('\nGrid fit parameters: {}'.format(p0))
 
 # validate steps
@@ -1292,7 +1722,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 		if len(vals)<2: pstep[k] = 0.
 		else:
 			if k not in list(pstep.keys()):
-				if isinstance(mdls[k].iloc[0],str): pstep[k] = -1.
+				if isinstance(mdls.loc[0,k],str): pstep[k] = -1.
 				else: pstep[k] = 0.5*numpy.nanmedian(numpy.absolute(numpy.array(vals)-numpy.roll(vals,1)))
 		if pstep[k] == 0: mkysfit.remove(k)
 		else:
@@ -1303,7 +1733,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 	pfitc,pfitd = {},{}
 	for k in mkysfit: 
 		if k in list(p0.keys()):
-			if isinstance(mdls[k].iloc[0],str): pfitd[k] = p0[k]
+			if isinstance(mdls.loc[0,k],str): pfitd[k] = p0[k]
 			else: pfitc[k] = p0[k]
 		else: 
 			default = splat.SPECTRAL_MODELS[mset]['default'][k]
@@ -1396,7 +1826,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 			dpfit.to_excel(outfile,index=False)
 # plot comparison
 			if verbose==True: print('Saving iterim plots')
-			pbest = dict(dpfit.iloc[numpy.argmin(dpfit['chis'])])
+			pbest = dict(dpfit.loc[numpy.argmin(dpfit['chis']),:])
 #			pbest['radius'] = (10.*u.pc*(scales[numpy.argmin(chis)]**0.5)).to(u.Rsun).value
 			cmdl = getModel(mdls,pbest,spscl.wave,scale=True,verbose=verbose)
 			# print(scales[numpy.argmin(chis)],pbest['scale'],numpy.nanmax(cmdl.flux.value))
@@ -1412,9 +1842,9 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 # plot cornerplot
 			plotpars = copy.deepcopy(mkysfit)
 			for k in plotpars:
-				if isinstance(mdls[k].iloc[0],str): plotpars.remove(k)
+				if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
 			if absolute==True: plotpars.append('radius')
-			pltbest = [dpfit[x].iloc[numpy.argmin(dpfit['chis'])] for x in plotpars]
+			pltbest = [dpfit.loc[numpy.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 			weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
 			outfile = file_prefix+'_corner.pdf'
@@ -1436,9 +1866,9 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 	dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in dpfit['scale']]
 
 # best fit parameters
-	pbest = dict(dpfit.iloc[numpy.argmin(dpfit['chis'])])
+	pbest = dict(dpfit.loc[numpy.argmin(dpfit['chis']),:])
 	pvalsb[numpy.argmin(chis[int(burn*nstep):])]
-	for x in ['flux']:
+	for x in [flux_name]:
 		if x in list(pbest.keys()): del pbest[x]
 	if verbose==True: print('Best parameters: {}'.format(pbest))
 	cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
@@ -1460,7 +1890,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 # plot comparison
 		# cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
 		# if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
-		label = '{} model '.format(mdls['model'].iloc[0])
+		label = '{} model '.format(mdls.loc[0,'model'])
 		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(chis[numpy.argmin(chis)]/dof)
 		label+='T={:.0f} '.format(pbest['teff'])
 		label+='logg={:.2f} '.format(pbest['logg'])
@@ -1474,9 +1904,9 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 # plot cornerplot
 		plotpars = copy.deepcopy(mkysfit)
 		for k in plotpars:
-			if isinstance(mdls[k].iloc[0],str): plotpars.remove(k)
+			if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
 		if absolute==True: plotpars.append('radius')
-		pltbest = [dpfit[x].iloc[numpy.argmin(dpfit['chis'])] for x in plotpars]
+		pltbest = [dpfit.loc[numpy.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 		weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
 		outfile = file_prefix+'_corner.pdf'
@@ -1502,8 +1932,7 @@ def fitMCMC(spc,models,p0={},constraints={},output='all',pstep=DEFAULT_MCMC_STEP
 # PLOTTING FUNCTIONS
 ########################################################################
 
-### NEED TO ADD LOG OPTION
-def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbose=ERROR_CHECKING):
+def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',verbose=ERROR_CHECKING):
 	diff = sspec.flux.value-cspec.flux.value
 
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
@@ -1523,7 +1952,12 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	ax1.set_yscale(yscale)
+	if yscale=='log':
+#		ax1.set_ylim([x*scl for x in [1.e-2,2]])
+		ax1.set_ylim([numpy.nanmean(sspec.noise.value)/2.,2*scl])
 	ax1.set_xlim(wrng)
+	ax1.set_xscale(xscale)
 	ax1.set_ylabel(ylabel,fontsize=12)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14)
@@ -1534,6 +1968,7 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	scl = numpy.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([2*sc for sc in scl])
 	ax2.set_xlim(wrng)
+	ax2.set_xscale(xscale)
 	ax2.set_xlabel(xlabel,fontsize=16)
 	ax2.set_ylabel(r'$\Delta$',fontsize=16)
 	ax2.tick_params(axis="x", labelsize=14)
@@ -1543,8 +1978,8 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,verbos
 	if verbose==True: plt.show()
 	return
 
-### NEED TO ADD LOG OPTION
-def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',outfile='',clabel='Comparison',scale=1.,absolute=False,verbose=ERROR_CHECKING):
+def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',outfile='',clabel='Comparison',
+	scale=1.,xscale='linear',yscale='linear',absolute=False,verbose=ERROR_CHECKING):
 # set up
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
@@ -1554,7 +1989,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	if nsample<0: nsample = int(len(chain)/10)
 
 # first identify the best fit model
-	pbest = dict(chain.iloc[numpy.argmin(chain['chis'])])
+	pbest = dict(chain.loc[numpy.argmin(chain['chis']),:])
 	cspec = getModel(models,pbest,sspec.wave)
 	if 'scale' not in list(chain.columns): cspec.scale(scale)
 #	cspec.scale(pbest['scale'])
@@ -1563,7 +1998,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 # now identify the random sample
 	chainsub = chain[chain['chis']/numpy.nanmin(chain['chis'])<relchi]
 	nsamp = numpy.nanmin([nsample,len(chainsub)])
-	fluxes = [getModel(models,dict(chainsub.iloc[i]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
+	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
 
 # plot
 	plt.clf()
@@ -1593,7 +2028,11 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	ax1.set_yscale(yscale)
+	if yscale=='log':
+		ax1.set_ylim([x*scl for x in [1.e-2,2]])
 	ax1.set_xlim(wrng)
+	ax1.set_yscale(xscale)
 	ax1.set_ylabel(ylabel,fontsize=12)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14)
@@ -1604,6 +2043,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	scl = numpy.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([scl[0]-0.5*(scl[1]-scl[0]),scl[1]+0.5*(scl[1]-scl[0])])
 	ax2.set_xlim(wrng)
+	ax2.set_yscale(xscale)
 	ax2.set_xlabel(xlabel,fontsize=16)
 	ax2.set_ylabel(r'$\Delta$',fontsize=16)
 	ax2.tick_params(axis="x", labelsize=14)
@@ -1629,10 +2069,10 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
 			ax.plot(numpy.zeros(len(dpfit[l]))+pbest[l],'b--')
 # indicate best fit in chain		
 		if 'chis' in list(dpfit.keys()):
-#			print(l,dpfit[l].iloc[numpy.argmin(dpfit['chis'])])
-			ax.plot(numpy.zeros(len(dpfit[l]))+dpfit[l].iloc[numpy.argmin(dpfit['chis'])],'m--')
+#			print(l,dpfit.loc[numpy.argmin(dpfit['chis']),l])
+			ax.plot(numpy.zeros(len(dpfit[l]))+dpfit.loc[numpy.argmin(dpfit['chis']),l],'m--')
 			ax.plot([numpy.argmin(dpfit['chis']),numpy.argmin(dpfit['chis'])],[numpy.nanmin(dpfit[l]),numpy.nanmax(dpfit[l])],'m--')
-			ax.set_title(dpfit[l].iloc[numpy.argmin(dpfit['chis'])])
+			ax.set_title(dpfit.loc[numpy.argmin(dpfit['chis']),l])
 # labels and ticks
 		ax.set_xlabel('Step',fontsize=14)
 		if l in list(PARAMETER_PLOT_LABELS.keys()): ax.set_ylabel(PARAMETER_PLOT_LABELS[l],fontsize=14)

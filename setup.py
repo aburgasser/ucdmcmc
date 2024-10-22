@@ -14,7 +14,6 @@ from __future__ import unicode_literals
 from setuptools import setup, find_packages
 from ucdmcmc.core import VERSION
 
-
 setup(
   name = "UCDMCMC",
   version = VERSION,
@@ -37,7 +36,7 @@ setup(
   ],
 
   package_dir = {'ucdmcmc': 'ucdmcmc'},    
-  package_data = {'ucdmcmc': ['models/*','spectra/*']},
+  package_data = {'ucdmcmc': ['models/*','spectra/*','tests/*']},
 #      'reference/Filters': [
 #        'reference/Filters/*.txt',
 #      ],
