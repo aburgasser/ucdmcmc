@@ -706,7 +706,7 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 		print('\tParameters:')
 		mpars,wave = getModelSet(availmodels[mdl]['files'][0])
 		kys = list(mpars.columns)
-		for x in ['model',DEFAULT_FLUX_NAME]:
+		for x in ['model','file',DEFAULT_FLUX_NAME]:
 			if x in kys: kys.remove(x)
 		for k in kys:
 			vals = list(set(list(mpars[k])))
@@ -908,7 +908,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 
 # generateModelSet
 def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},initial_instrument='RAW',
-	method='integrate',smooth=1,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+	method='integrate',resample=False,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -941,12 +941,10 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 		model parameters; or equivalent dict structure; or a .xslx or .csv file containing these parameters. 
 		If not provided, code will attempt to reconstruct model parameters from filename, but note this 
 		only works with SPLAT model file name conventions.
-		[NOTE: THIS IS CURRENTLY EXPERIMENTAL]
 
 	initial_instrument = 'RAW': str
 		Name of the instrument for which the models and wavelength grid should be computed; by default this
 		is 'RAW' 
-		[NOTE: THIS PARAMETER MAY BE OUT OF DATE]
 
 	method = 'integrate': str
 		The method by which to interpolate the origial model set onto the wavelength grid  (used by `resample`); options are:
@@ -1001,30 +999,48 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 
 	'''
 
-# wavelength grid
-# if a string, try reading in
-	if isinstance(wave,str):
-		wv = readWave(wave,verbose=verbose)
-# check if unitted and convert if so
-	elif isinstance(wave,list) or isinstance(wave,numpy.ndarray):
-		if isUnit(wave): wv = wave.to(DEFAULT_WAVE_UNIT).value
-		elif isUnit(wave[0]): wv = [w.to(DEFAULT_WAVE_UNIT).value for w in wave]
-		else: wv = copy.deepcopy(wave)
-		if len(wv) < 2:
-			print('Input wavelegnth array has only {:.0f} elements, not proceeding'.format(len(wv)))
-			return False
-# return if cannot process wave grid
-	else:
-		print('Unable to read wave input of type {}: convert to list or numpy array instead'.format(type(wave)))
-		return False
-
 # load up models and parameters
+
 # first check if this is a folder containing models
 	if os.path.isdir(modelset):
-		print('temporary holding place for reading in models from a folder')
-		return False
 
-# go through SPLAT path
+# first check if we are reading in folder with instrument name
+		files = glob.glob(os.path.join(modelset,'*'))
+		if len(files)==0: 
+			if os.path.isdir(os.path.join(modelset,initial_instrument))==True:
+				modelset = os.path.join(modelset,initial_instrument)
+		files = glob.glob(os.path.join(modelset,'*'))
+		if len(files)==0: 
+			raise ValueError('Unable to find any files in {}'.format(modelset))
+		if verbose==True: print('Reading in files from {}'.format(modelset))
+
+# check for modelpars
+		if len(modelpars)==0: 
+			modelpars = pandas.DataFrame()
+			modelpars['file'] = files
+			mpar = {}
+			for i in range(len(files)):
+				par = spmdl.ModelNameToParameters(files[i])
+#				print(par)
+				for x in list(par.keys()): 
+					if i==0: mpar[x] = [par[x]]
+					else: mpar[x].append(par[x])
+			for x in list(mpar.keys()): modelpars[x] = mpar[x]
+			mset = modelpars.loc[i,'model']
+#			print(modelpars)
+	#		raise ValueError('Must provide modelpars parameter with file names and parameters to use this read in option')
+		if isinstance(modelpars,dict)==True: modelpars = pandas.DataFrame(mpars)
+		if 'file' not in list(modelpars.columns): 
+			raise ValueError('modelpars parameters must have a file column specifying file name')
+
+	# check that first file	is present
+		if os.path.exists(modelpars.loc[0,'file'])==False:
+			if os.path.exists(os.path.join(modelset,modelpars.loc[0,'file']))==False:
+				raise ValueError('Unable to locate the file {} in the modelpars input variable'.format(modelpars.loc[0,'file']))
+			else: modelpars['file'] = [os.path.join(modelset,x) for x in modelpars['file']]
+
+
+# or go through SPLAT path
 	else:
 # check modelset name
 		mset = spmdl.checkSpectralModelName(modelset)
@@ -1065,23 +1081,89 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 				modelpars = modelpars[modelpars[k]>=constraints[k][0]]
 				modelpars = modelpars[modelpars[k]<=constraints[k][1]]
 				modelpars.reset_index(inplace=True,drop=True)
-
-# read in and resample the models
 	if verbose==True: print('Processing {:.0f} {} models'.format(len(modelpars),mset))
+
+
+# wavelength grid if resampling
+# if a string, try reading in
+	wave0 = []
+	if resample==True:
+		if isinstance(wave,str):
+			wave0 = readWave(wave,verbose=verbose)
+# check if unitted and convert if so
+		elif isinstance(wave,list) or isinstance(wave,numpy.ndarray):
+			if isUnit(wave): wave0 = wave.to(DEFAULT_WAVE_UNIT).value
+			elif isUnit(wave[0]): wave0 = [w.to(DEFAULT_WAVE_UNIT).value for w in wave]
+			else: wave0 = copy.deepcopy(wave)
+			if len(wave0) < 2:
+				print('Input wavelength array has only {:.0f} elements, skipping resample'.format(len(wave0)))
+				resample = False
+# return if cannot process wave grid
+		else:
+			print('Unable to read wave input of type {}: skipping resample'.format(type(wave)))
+			resample = False
+
+# read in the models trying a few different methods
 	pars = []
-# using a very dumbed down tqdm to save on memory issues	
 	step = numpy.ceil(len(modelpars)/10.)
 #	for i in tqdm(range(len(dp))):
 	for i in range(len(modelpars)):
 		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
 		par = dict(modelpars.loc[i,:])
-# REPLACE THIS WITH REGULAR FILE READ
-		# mdl = spmdl.loadModel(**par,force=True)
-		mdl = splat.Spectrum(filename=modelpars.loc[i,'file'])
-#		par[flux_name] = resample(mdl.flux,mdl.wave,wv,smooth=smooth,method=method)
-		mdlsm = resample(mdl,wv,smooth=smooth,method=method)
-		par[flux_name] = mdlsm.flux.value
+
+# read in with splat.Spectrum
+		mdl = splat.Spectrum(modelpars.loc[i,'file'])
+		wv,flx = mdl.wave.value,mdl.flux.value
+# read in with spmdl.loadModel
+		if numpy.isfinite(numpy.nanmedian(flx))==False:
+			par = dict(modelpars.loc[i,:])
+			mdl = spmdl.loadModel(**par,force=True)
+			wv,flx = mdl.wave.value,mdl.flux.value
+# read in with splat.readSpectrum
+		if numpy.isfinite(numpy.nanmedian(flx))==False:
+			mdl = splat.readSpectrum(modelpars.loc[i,'file'])
+			wv,flx = mdl['wave'].value,mdl['flux'].value
+# read in with pandas
+		if numpy.isfinite(numpy.nanmedian(flx))==False:
+			if '.txt' in modelpars.loc[i,'file']: delim='\t'
+			elif '.csv' in modelpars.loc[i,'file']: delim=','
+			else: delim='\s+'
+			dp = pandas.read_csv(modelpars.loc[i,'file'],delimiter=delim,names=['wave','flux'],comment='#')
+			wv,flx = dp['wave'],dp['flux']
+# don't know what to do
+		print(modelpars.loc[i,'file'],len(flx))
+		if numpy.isfinite(numpy.nanmedian(flx))==False:
+			raise ValueError('Could not read in file {}'.format(modelpars.loc[i,'file']))
+
+# resample if desired
+		if resample==True:
+			mdl = splat.Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
+			mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
+			wv,flx = mdlsm.wave.value,mdlsm.flux.value
+		else:
+			if i==0: wave0 = copy.deepcopy(wv)
+
+		par[flux_name] = flx
 		pars.append(par)
+
+
+
+# # read in and (optionally) resample the models
+# 	if verbose==True: print('Processing {:.0f} {} models'.format(len(modelpars),mset))
+# 	pars = []
+# # using a very dumbed down tqdm to save on memory issues	
+# 	step = numpy.ceil(len(modelpars)/10.)
+# #	for i in tqdm(range(len(dp))):
+# 	for i in range(len(modelpars)):
+# 		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
+# 		par = dict(modelpars.loc[i,:])
+# # ***** REPLACE THIS WITH REGULAR FILE READ
+# 		# mdl = spmdl.loadModel(**par,force=True)
+# 		mdl = splat.Spectrum(modelpars.loc[i,'file'])
+# #		par[flux_name] = resample(mdl.flux,mdl.wave,wv,smooth=smooth,method=method)
+# 		mdlsm = resample(mdl,wv,smooth=smooth,method=method)
+# 		par[flux_name] = mdlsm.flux.value
+# 		pars.append(par)
 
 # save the models
 	outfile = file_prefix+'.h5'
@@ -1997,6 +2079,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 
 # now identify the random sample
 	chainsub = chain[chain['chis']/numpy.nanmin(chain['chis'])<relchi]
+	chainsub.reset_index(inplace=True)
 	nsamp = numpy.nanmin([nsample,len(chainsub)])
 	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
 
