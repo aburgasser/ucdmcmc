@@ -88,7 +88,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '13 Sep 2024'
+VERSION = '15 Nov 2024'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -158,6 +158,7 @@ DEFINED_SPECTRAL_MODELS = {\
 	'burrows06': {'instruments': {}, 'name': 'Burrows et al. (2006)', 'citation': 'Burrows et al. (2006)', 'bibcode': '2006ApJ...640.1063B', 'altname': ['burrows','burrows2006'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
 	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024arXiv240200758M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
 	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'elfowl24-ph3': {'instruments': {}, 'name': 'Sonora Elfowl + PH3', 'citation': 'Beiler et al. (2024)', 'bibcode': '2024ApJ...973...60B', 'altname': ['elfowl-ph3','sonora-elfowl-ph3','beiler24','beiler','bei24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 400., 'logg': 4.0, 'z': 0., 'cld': 'nc', 'kzz': 0.}}, \
 	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 2., 'co': 0.85}}, \
@@ -908,7 +909,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 
 # generateModelSet
 def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},initial_instrument='RAW',
-	method='integrate',resample=False,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+	method='integrate',doresample=False,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -1087,7 +1088,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 # wavelength grid if resampling
 # if a string, try reading in
 	wave0 = []
-	if resample==True:
+	if doresample==True:
 		if isinstance(wave,str):
 			wave0 = readWave(wave,verbose=verbose)
 # check if unitted and convert if so
@@ -1097,11 +1098,11 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 			else: wave0 = copy.deepcopy(wave)
 			if len(wave0) < 2:
 				print('Input wavelength array has only {:.0f} elements, skipping resample'.format(len(wave0)))
-				resample = False
+				doresample = False
 # return if cannot process wave grid
 		else:
 			print('Unable to read wave input of type {}: skipping resample'.format(type(wave)))
-			resample = False
+			doresample = False
 
 # read in the models trying a few different methods
 	pars = []
@@ -1131,12 +1132,12 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 			dp = pandas.read_csv(modelpars.loc[i,'file'],delimiter=delim,names=['wave','flux'],comment='#')
 			wv,flx = dp['wave'],dp['flux']
 # don't know what to do
-		print(modelpars.loc[i,'file'],len(flx))
-		if numpy.isfinite(numpy.nanmedian(flx))==False:
-			raise ValueError('Could not read in file {}'.format(modelpars.loc[i,'file']))
+#		print(modelpars.loc[i,'file'],len(flx))
+		try: md = numpy.isfinite(numpy.nanmedian(flx))
+		except: raise ValueError('Could not read in file {}'.format(modelpars.loc[i,'file']))
 
 # resample if desired
-		if resample==True:
+		if doresample==True:
 			mdl = splat.Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
 			mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
 			wv,flx = mdlsm.wave.value,mdlsm.flux.value
@@ -1587,10 +1588,10 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 				mdls = mdls[mdls[k]<=constraints[k][1]]
 	
 # run through each grid point
-	for x in ['scale','chi','radius','dof']: mdls[x] = [numpy.nan]*len(mdls)
+	for x in ['scale','chis','radius','dof']: mdls[x] = [numpy.nan]*len(mdls)
 	for jjj in range(len(mdls)):
 		chi,scl,dof = compareSpec(spscl.flux.value,numpy.array(mdls.loc[jjj,flux_name]),spscl.noise.value,verbose=verbose)
-		mdls.loc[jjj,'chi'] = chi
+		mdls.loc[jjj,'chis'] = chi
 		mdls.loc[jjj,'scale'] = scl
 		mdls.loc[jjj,'dof'] = dof
 # radius scaling assuming spectrum is in absolute flux units
@@ -1598,8 +1599,8 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 #	mdls['model'] = [mset]*len(mdls)
 
 # best fit
-	mpar = dict(mdls.loc[numpy.argmin(mdls['chi']),:])
-	mpar['rchi'] = mpar['chi']/mpar['dof']
+	mpar = dict(mdls.loc[numpy.argmin(mdls['chis']),:])
+	mpar['rchi'] = mpar['chis']/mpar['dof']
 	dpars = list(mdls.keys())
 	for x in [flux_name]:
 		if x in list(mpar.keys()): del mpar[x]
@@ -2014,7 +2015,8 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 # PLOTTING FUNCTIONS
 ########################################################################
 
-def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',verbose=ERROR_CHECKING):
+def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
+	figsize=[8,5],height_ratio=[5,1],fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 	diff = sspec.flux.value-cspec.flux.value
 
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
@@ -2024,25 +2026,26 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
 
 	plt.clf()
-	plt.figure(figsize=[8,7])
-	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [4,1]}, sharex=True)
+	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=4,alpha=0.5,label=clabel)
-	ax1.legend(fontsize=12)
+	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
 	ax1.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
-	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	else: ax1.set_ylim(ylim)
 	ax1.set_yscale(yscale)
 	if yscale=='log':
 #		ax1.set_ylim([x*scl for x in [1.e-2,2]])
-		ax1.set_ylim([numpy.nanmean(sspec.noise.value)/2.,2*scl])
-	ax1.set_xlim(wrng)
+		if ylim==None: ax1.set_ylim([numpy.nanmean(sspec.noise.value)/2.,2*scl])
+	if xlim==None: xlim=wrng
+	ax1.set_xlim(xlim)
 	ax1.set_xscale(xscale)
-	ax1.set_ylabel(ylabel,fontsize=12)
+	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
 	ax1.tick_params(axis="x", labelsize=0)
-	ax1.tick_params(axis="y", labelsize=14)
+	ax1.tick_params(axis="y", labelsize=14*fontscale)
 
 	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
 	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
@@ -2051,17 +2054,18 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	ax2.set_ylim([2*sc for sc in scl])
 	ax2.set_xlim(wrng)
 	ax2.set_xscale(xscale)
-	ax2.set_xlabel(xlabel,fontsize=16)
-	ax2.set_ylabel(r'$\Delta$',fontsize=16)
-	ax2.tick_params(axis="x", labelsize=14)
-	ax2.tick_params(axis="y", labelsize=14)
+	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
+	ax2.set_ylabel(r'$\Delta$',fontsize=16*fontscale)
+	ax2.tick_params(axis="x", labelsize=14*fontscale)
+	ax2.tick_params(axis="y", labelsize=14*fontscale)
 	plt.tight_layout()
 	if outfile!='': plt.savefig(outfile)
 	if verbose==True: plt.show()
 	return
 
-def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',outfile='',clabel='Comparison',
-	scale=1.,xscale='linear',yscale='linear',absolute=False,verbose=ERROR_CHECKING):
+def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
+	clabel='Comparison',scale=1.,xscale='linear',yscale='linear',figsize=[8,5],height_ratio=[5,1],fontscale=1,
+	ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 # set up
 	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
@@ -2085,8 +2089,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 
 # plot
 	plt.clf()
-	plt.figure(figsize=[8,7])
-	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [4,1]}, sharex=True)
+	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	if method=='minmax':
 		minflx = numpy.nanmin(fluxes,axis=0)
 		maxflx = numpy.nanmax(fluxes,axis=0)
@@ -2105,20 +2108,23 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
-	ax1.legend(fontsize=12)
+	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
 	ax1.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanmax(cspec.flux.value)
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
-	ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	else: ax1.set_ylim(ylim)
+	ax1.set_yscale(yscale)
 	ax1.set_yscale(yscale)
 	if yscale=='log':
-		ax1.set_ylim([x*scl for x in [1.e-2,2]])
-	ax1.set_xlim(wrng)
+		if ylim==None: ax1.set_ylim([x*scl for x in [1.e-2,2]])
+	if xlim==None: xlim=wrng
+	ax1.set_xlim(xlim)
 	ax1.set_yscale(xscale)
-	ax1.set_ylabel(ylabel,fontsize=12)
+	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
 	ax1.tick_params(axis="x", labelsize=0)
-	ax1.tick_params(axis="y", labelsize=14)
+	ax1.tick_params(axis="y", labelsize=14*fontscale)
 
 	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
 	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
@@ -2127,10 +2133,10 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	ax2.set_ylim([scl[0]-0.5*(scl[1]-scl[0]),scl[1]+0.5*(scl[1]-scl[0])])
 	ax2.set_xlim(wrng)
 	ax2.set_yscale(xscale)
-	ax2.set_xlabel(xlabel,fontsize=16)
-	ax2.set_ylabel(r'$\Delta$',fontsize=16)
-	ax2.tick_params(axis="x", labelsize=14)
-	ax2.tick_params(axis="y", labelsize=14)
+	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
+	ax2.set_ylabel(r'$\Delta$',fontsize=16*fontscale)
+	ax2.tick_params(axis="x", labelsize=14*fontscale)
+	ax2.tick_params(axis="y", labelsize=14*fontscale)
 	plt.tight_layout()
 	if outfile!='': plt.savefig(outfile)
 	if verbose==True: plt.show()
