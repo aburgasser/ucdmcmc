@@ -141,6 +141,7 @@ DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0
 
 
 DEFINED_INSTRUMENTS = {
+	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': [''], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': [''], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
@@ -524,7 +525,7 @@ STOPPED HERE
 						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
 					else:
-						flx[i] = numpy.nansum(wts*flx0[wn])/numpy.nansum(wts)
+						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
 				elif method.lower() in ['weighted integrate','wint']:
 					wts = 1./unc0s[wn]**2
@@ -730,8 +731,61 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 
 def generateWave(wave_range,wstep,method='resolution',verbose=ERROR_CHECKING):
 	'''
+	Purpose
+	-------
+
 	Generates a wavelength array by specifying range and either a resolution or constant step size
-	'''
+
+	Parameters
+	----------
+
+	wave_range : list or numpy array
+		limits of wavelength range to be modeled; if not unitted, assumed to be microns
+
+	wstep : float
+		the wavelength spacing whose value is interpreted based on the method parameter
+
+	method = 'resolution' : str
+		the method to use to generate the wave length array; options are:
+		* 'resolution' (default): wstep is a constant spectral resolution (also 'res', 'ldl')
+		* 'wavelength': wstep is a constant step in wavelength space (also 'lam','lambda','step','linear','wave')
+		* 'frequency': wstep is a constant step in frequency space (also 'freq','f','nu')
+
+	verbose = False : bool [optional]
+		set to True to return verbose output, including listing all models 
+
+	Outputs
+	-------
+
+	Prints a summary of the models available and their parameter ranges
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+	ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+	'lowz'
+
+	>>> ucdmcmc.checkName('meisner',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	Model btsettl08:
+		Reference: Allard, F. et al. (2012, Philosophical Transactions of the Royal Society A, 370, 2765-2777)
+		Bibcode: 2012RSPTA.370.2765A
+		Computed for instruments RAW, SPEX-PRISM
+		Parameters:
+			teff: 500.0 K to 3500.0 K
+			logg: 3.0 dex to 5.5 dex
+			z: -2.5 dex to 0.5 dex
+			enrich: 0.0 dex to 0.4 dex
+
+	Dependencies
+	------------
+		`splat.citations.shortRef()`_
+		`splat.model.loadModelParameters()`_
+		`splat.utilities.checkSpectralModelName()`_
+		copy
+	'''	
 # prepare wavelength range
 	wunit = DEFAULT_WAVE_UNIT
 	if len(wave_range) != 2: raise ValueError('input wave length range must be a 2-element list or numpy array, you passed {}'.format(wave_range))
@@ -744,15 +798,20 @@ def generateWave(wave_range,wstep,method='resolution',verbose=ERROR_CHECKING):
 	else: wv = copy.deepcopy(wave_range)
 
 # generate wavelength grid based on different methods
-	if method in ['resolution','res']:
+	if method in ['resolution','res','ldl']:
 		if verbose==True: print('Generate wavelength grid from {} to {} at constant resolution {}'.format(wv[0]*wunit,wv[1]*wunit,wstep))
 		wave = [wv[0]]
 		while wave[-1] <= wv[1]: wave.append(wave[-1]*(1+1/wstep))
-#	elif method.lower() in ['step','linear']:
-	else:
-		if verbose==True: print('Generate wavelength grid from {} to {} at constant step size {}'.format(wv[0]*wunit,wv[1]*wunit,wstep*wunit))
+	elif method.lower() in ['wave','wavelength','lambda','lam','step','linear']:
+		if verbose==True: print('Generate wavelength grid from {} to {} at constant lambda step size {}'.format(wv[0]*wunit,wv[1]*wunit,wstep*wunit))
 		wave = [wv[0]]
 		while wave[-1] <= wv[1]: wave.append(wave[-1]+wstep)
+	elif method.lower() in ['frequency','freq','f','nu']:
+		if isUnit(wstep): ws.to(u.Hz,equivalencies=u.spectral())
+		else: ws=wstep*u.Hz
+		if verbose==True: print('Generate wavelength grid from {} to {} at constant frequency step size {}'.format(wv[0]*wunit,wv[0]*wunit,ws))
+		wave = [wv[0]]
+		while wave[-1] <= wv[1]: wave.append(((wave[-1]*wunit).to(u.Hz,equivalencies=u.spectral())-wstep).to(wunit,equivalencies=u.spectral()).value)
 
 # return
 	return numpy.array(wave)*wunit
@@ -909,7 +968,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 
 # generateModelSet
 def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},initial_instrument='RAW',
-	method='integrate',doresample=False,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+	method='integrate',doresample=True,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -1169,17 +1228,19 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 # save the models
 	outfile = file_prefix+'.h5'
 	dpo = pandas.DataFrame(pars)
-	for x in ['instrument']:
+	for x in ['instrument','file']:
 		if x in list(dpo.columns): del dpo[x]
 	if verbose==True: print('Saving {} models to {}'.format(mset,outfile))
-	dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
+	try: dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
+	except: 
+		print('WARNING: unable to write hdf file {}; returning wave grid and models as outputs'.format(outfile))
 	if save_wave==True: 
 		dpw = pandas.DataFrame()
 		dpw['wave'] = wv
 		outfile = wave_prefix+'.csv'
 		dpw.to_csv(outfile,index=False)
 		if verbose==True: print('Saving wavelength array to {}'.format(outfile))
-	return True
+	return wv,dpo
 
 
 # getGridModel()
@@ -1463,6 +1524,8 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 	mdl.parameters = par0
 	return mdl
 
+
+
 def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
 	except: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
@@ -1586,6 +1649,7 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 				if verbose==True: print('Constaining {} to {}-{}'.format(k,constraints[k][0],constraints[k][1]))
 				mdls = mdls[mdls[k]>=constraints[k][0]]
 				mdls = mdls[mdls[k]<=constraints[k][1]]
+				mdls.reset_index(inplace=True,drop=True)
 	
 # run through each grid point
 	for x in ['scale','chis','radius','dof']: mdls[x] = [numpy.nan]*len(mdls)
