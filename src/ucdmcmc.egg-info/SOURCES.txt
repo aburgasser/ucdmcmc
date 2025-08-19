@@ -2,6 +2,7 @@ LICENSE
 MANIFEST.in
 README.md
 pyproject.toml
+requirements.txt
 setup.py
 src
 tests
@@ -167,7 +168,7 @@ src/ucdmcmc/spectra/SPEX-PRISM_J0559-1404_Burgasser2006.csv
 src/ucdmcmc.egg-info/PKG-INFO
 src/ucdmcmc.egg-info/SOURCES.txt
 src/ucdmcmc.egg-info/dependency_links.txt
-src/ucdmcmc.egg-info/requires.txt
+src/ucdmcmc.egg-info/requirements.txt
 src/ucdmcmc.egg-info/top_level.txt
 tests/test_basic.py
 tests/test_models.py

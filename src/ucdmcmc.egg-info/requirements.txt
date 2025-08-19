@@ -1,0 +1,9 @@
+astropy
+astroquery
+scipy
+matplotlib
+numpy
+pandas
+
+[:python_version < "3.9"]
+importlib_resources
