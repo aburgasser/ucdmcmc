@@ -1,9 +1,13 @@
 astropy
 astroquery
-scipy
+corner
+glob
 matplotlib
 numpy
 pandas
+scipy
+statsmodels
+tqdm
 
 [:python_version < "3.9"]
 importlib_resources

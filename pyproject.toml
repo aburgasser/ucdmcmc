@@ -13,12 +13,17 @@ classifiers = [
 dependencies = [
     "astropy",
     "astroquery",
-    "scipy",
+    "corner",
+    "glob",
     "matplotlib",
     "numpy",
     "pandas",
+    "scipy",
+    "statsmodels",
+    "tqdm",
     "importlib_resources; python_version < '3.7'",
 ]
+
 dynamic = ["version"]
 
 [project.optional-dependencies]
