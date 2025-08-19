@@ -1,0 +1,30 @@
+Metadata-Version: 2.1
+Name: ucdmcmc
+Version: 0.1
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: astropy
+Requires-Dist: astroquery
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: importlib_resources; python_version < "3.9"
+
+# UCDMCMC
+ UCD MCMC model fitting code
+
+## INSTALLATION NOTES
+
+ucdmcmc can be installed by git clone:
+
+git clone
+
+cd ucdmcmc
+
+python -m setup.py install
+
+a check is that ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
+altnerately ucdmcmc.modelInfo() returns models
