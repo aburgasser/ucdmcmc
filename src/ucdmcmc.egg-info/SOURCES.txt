@@ -9,7 +9,6 @@ tests
 notebooks/tutorial.ipynb
 src/ucdmcmc/__init__.py
 src/ucdmcmc/core.py
-src/ucdmcmc/models/models_atmo20_JWST-NIRSPEC-MIRI.h5
 src/ucdmcmc/models/models_atmo20_JWST-NIRSPEC-PRISM.h5
 src/ucdmcmc/models/models_atmo20_NIR.h5
 src/ucdmcmc/models/models_atmo20_SPEX-PRISM.h5
@@ -100,7 +99,6 @@ src/ucdmcmc/models/models_sonora21_JWST-NIRSPEC-PRISM.h5
 src/ucdmcmc/models/models_sonora21_NIR.h5
 src/ucdmcmc/models/models_sonora21_SPEX-PRISM.h5
 src/ucdmcmc/models/models_tremblin15_EUCLID.h5
-src/ucdmcmc/models/models_tremblin15_JWST-NIRSPEC-MIRI.h5
 src/ucdmcmc/models/models_tremblin15_JWST-NIRSPEC-PRISM.h5
 src/ucdmcmc/models/models_tremblin15_NIR.h5
 src/ucdmcmc/models/models_tremblin15_SPEX-PRISM.h5
@@ -111,8 +109,6 @@ src/ucdmcmc/models/wave_JWST-NIRSPEC-MIRI.csv
 src/ucdmcmc/models/wave_JWST-NIRSPEC-PRISM.csv
 src/ucdmcmc/models/wave_NIR.csv
 src/ucdmcmc/models/wave_SPEX-PRISM.csv
-
-src/ucdmcmc/opacities/exomol/
 src/ucdmcmc/opacities/exomol/12C-16O2_1500-5000_350K_0.400000.sigma
 src/ucdmcmc/opacities/exomol/12C-16O2_500-12000_600K_0.250000.sigma
 src/ucdmcmc/opacities/exomol/12C-16O2_500-12000_600K_1.000000.sigma
