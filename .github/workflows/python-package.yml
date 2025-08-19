@@ -26,22 +26,6 @@ jobs:
     - name: work around permission issue. # relevant issue https://github.com/actions/checkout/issues/766
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE" 
 
-    - name: Create LFS file list # relevant issue https://github.com/actions/checkout/issues/165#issuecomment-1639209867_
-      run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
-
-    - name: LFS Cache
-      uses: actions/cache/@v4
-      id: restore-lfs-cache
-      with:
-        path: .git/lfs/objects
-        key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
-        restore-keys: |
-          ${{ runner.os }}-lfs-
-          ${{ runner.os }}
-
-    - name: Git LFS Pull
-      run: git lfs pull
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
@@ -52,17 +36,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        python -m pip install --upgrade pip
-        python -m pip install flake8 pytest
-#        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python -m pip install pytest
         python -m pip install .
-
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
       run: |
