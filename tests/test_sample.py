@@ -8,8 +8,9 @@ VERBOSE=True
 # check the provided sample spectra
 def test_sample():
 	for instr in list(DEFINED_INSTRUMENTS.keys()):
-		sp = getSample(instr,verbose=VERBOSE)
-		assert isinstance(sp,splat.core.Spectrum)
+		if DEFINED_INSTRUMENTS[instr]['sample']!='':
+			sp = getSample(instr,verbose=VERBOSE)
+			assert isinstance(sp,splat.core.Spectrum)
 
 # check spectral re-sampling
 def test_resample():

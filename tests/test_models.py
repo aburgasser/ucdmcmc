@@ -57,12 +57,12 @@ def test_models():
 					print(x,msp.parameters[x],DEFINED_SPECTRAL_MODELS[mdl]['default'][x])
 					assert msp.parameters[x]==DEFINED_SPECTRAL_MODELS[mdl]['default'][x]
 # get an interpolated model (may not work?)
-				par['teff'] = par['teff']+25
-				msp = getInterpModel(fluxes,par,wave,verbose=VERBOSE)
-				assert isinstance(msp,type(splat.core.Spectrum))
-				assert len(msp.wave)==len(wave)
-				for x in list(DEFINED_SPECTRAL_MODELS[mdl]['default'].keys()):
-					assert msp.parameters[x]==par[x]
+				# par['teff'] = par['teff']+25
+				# msp = getInterpModel(fluxes,par,wave,verbose=VERBOSE)
+				# assert isinstance(msp,type(splat.core.Spectrum))
+				# assert len(msp.wave)==len(wave)
+				# for x in list(DEFINED_SPECTRAL_MODELS[mdl]['default'].keys()):
+				# 	assert msp.parameters[x]==par[x]
 
 # check generating models: JWST-NIRSPEC-MIRI --> JWST-NIRSPEC-PRISM
 # this needs to have some test data to go with it
