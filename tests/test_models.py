@@ -48,6 +48,8 @@ def test_models():
 			mfile = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(MODEL_FILE_PREFIX,mdl,instr))
 			if os.path.exists(mfile):
 				fluxes,wave = getModelSet(mdl,instr,verbose=VERBOSE)
+# check these are the same size
+				assert len(wave)==len(fluxes.loc[0,'flux'])				
 # get one of the grid models (default parameters)
 				par = DEFINED_SPECTRAL_MODELS[mdl]['default']
 				msp = getGridModel(fluxes,par,wave,verbose=VERBOSE)
