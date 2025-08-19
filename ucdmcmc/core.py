@@ -88,7 +88,7 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '15 Nov 2024'
+VERSION = '19 August 2025'
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))+'/../'
@@ -541,7 +541,7 @@ STOPPED HERE
 # median by default
 				else:
 					flx[i] = numpy.nanmedian(flx0s[wn])
-					if isfinite(numpy.nanmax(unc0s))==True: unc[i] = flx[i]/numpy.nanmedian(flx0s[wn]/unc0s[wn])
+					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = flx[i]/numpy.nanmedian(flx0s[wn]/unc0s[wn])
 		# else:
 		# 	print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
 #					unc[i] = numpy.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
@@ -2080,12 +2080,16 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 ########################################################################
 
 def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
-	figsize=[8,5],height_ratio=[5,1],fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+	figsize=[8,5],height_ratio=[5,1],scale=1.,fontscale=1,xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',
+	ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+
+	sspec.scale(scale)
+	cspec.scale(scale)
 	diff = sspec.flux.value-cspec.flux.value
 
-	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
-	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
-	if absolute==True: ylabel='Absolute '+ylabel
+	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
+	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
+	# if absolute==True: ylabel='Absolute '+ylabel
 	strue = sspec.wave.value[numpy.isnan(sspec.flux.value)==False]
 	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
 
@@ -2100,13 +2104,13 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
 	else: ax1.set_ylim(ylim)
-	ax1.set_yscale(yscale)
 	if yscale=='log':
 #		ax1.set_ylim([x*scl for x in [1.e-2,2]])
 		if ylim==None: ax1.set_ylim([numpy.nanmean(sspec.noise.value)/2.,2*scl])
 	if xlim==None: xlim=wrng
 	ax1.set_xlim(xlim)
 	ax1.set_xscale(xscale)
+	ax1.set_yscale(yscale)
 	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14*fontscale)
@@ -2115,11 +2119,13 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanquantile(diff,[0.02,0.98])
-	ax2.set_ylim([2*sc for sc in scl])
-	ax2.set_xlim(wrng)
+	# ax2.set_ylim([2*sc for sc in scl])
+	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
+	ax2.set_xlim(xlim)
 	ax2.set_xscale(xscale)
+	ax2.set_yscale(yscale)
 	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
-	ax2.set_ylabel(r'$\Delta$',fontsize=16*fontscale)
+	ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
 	ax2.tick_params(axis="x", labelsize=14*fontscale)
 	ax2.tick_params(axis="y", labelsize=14*fontscale)
 	plt.tight_layout()
@@ -2127,22 +2133,27 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	if verbose==True: plt.show()
 	return
 
-def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
-	clabel='Comparison',scale=1.,xscale='linear',yscale='linear',figsize=[8,5],height_ratio=[5,1],fontscale=1,
-	ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
+	clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,xscale='linear',yscale='linear',
+	figsize=[8,5],height_ratio=[5,1],fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 # set up
-	xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
-	ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
-	if absolute==True: ylabel='Absolute '+ylabel
-	strue = sspec.wave.value[numpy.isnan(sspec.flux.value)==False]
+	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
+	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
+	# if absolute==True: ylabel='Absolute '+ylabel
+	strue = spec.wave.value[numpy.isnan(spec.flux.value)==False]
 	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
 	if nsample<0: nsample = int(len(chain)/10)
 
 # first identify the best fit model
 	pbest = dict(chain.loc[numpy.argmin(chain['chis']),:])
-	cspec = getModel(models,pbest,sspec.wave)
-	if 'scale' not in list(chain.columns): cspec.scale(scale)
+	cspec = getModel(models,pbest,spec.wave)
+#	if 'scale' not in list(chain.columns): cspec.scale(scale)
 #	cspec.scale(pbest['scale'])
+# scale
+	sspec = copy.deepcopy(spec)
+	sspec.scale(scale)
+#	print(numpy.nanmedian(sspec.flux.value))
+	cspec.scale(scale)
 	diff = sspec.flux.value-cspec.flux.value
 
 # now identify the random sample
@@ -2155,18 +2166,18 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	plt.clf()
 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	if method=='minmax':
-		minflx = numpy.nanmin(fluxes,axis=0)
-		maxflx = numpy.nanmax(fluxes,axis=0)
-		if 'scale' not in list(chainsub.columns):
-			minflx = minflx*scale 
-			maxflx = maxflx*scale 
+		minflx = numpy.nanmin(fluxes,axis=0)*scale
+		maxflx = numpy.nanmax(fluxes,axis=0)*scale
+		# if 'scale' not in list(chainsub.columns):
+		# 	minflx = minflx*scale 
+		# 	maxflx = maxflx*scale 
 		ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
 	elif method=='meanstd':
-		meanflx = numpy.nanmean(fluxes,axis=0)
-		stdflx = numpy.nanstd(fluxes,axis=0)
-		if 'scale' not in list(chainsub.columns):
-			meanflx = meanflx*scale 
-			stdflx = stdflx*scale 
+		meanflx = numpy.nanmean(fluxes,axis=0)*scale
+		stdflx = numpy.nanstd(fluxes,axis=0)*scale
+		# if 'scale' not in list(chainsub.columns):
+		# 	meanflx = meanflx*scale 
+			# stdflx = stdflx*scale 
 		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=0.2)
 	else:
 		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
@@ -2179,13 +2190,12 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
 	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
 	else: ax1.set_ylim(ylim)
-	ax1.set_yscale(yscale)
+	ax1.set_xscale(xscale)
 	ax1.set_yscale(yscale)
 	if yscale=='log':
 		if ylim==None: ax1.set_ylim([x*scl for x in [1.e-2,2]])
 	if xlim==None: xlim=wrng
 	ax1.set_xlim(xlim)
-	ax1.set_yscale(xscale)
 	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
 	ax1.tick_params(axis="x", labelsize=0)
 	ax1.tick_params(axis="y", labelsize=14*fontscale)
@@ -2194,11 +2204,12 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = numpy.nanquantile(diff,[0.02,0.98])
-	ax2.set_ylim([scl[0]-0.5*(scl[1]-scl[0]),scl[1]+0.5*(scl[1]-scl[0])])
-	ax2.set_xlim(wrng)
-	ax2.set_yscale(xscale)
+	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
+	ax2.set_xlim(xlim)
+	ax2.set_xscale(xscale)
+	ax2.set_yscale(yscale)
 	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
-	ax2.set_ylabel(r'$\Delta$',fontsize=16*fontscale)
+	ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
 	ax2.tick_params(axis="x", labelsize=14*fontscale)
 	ax2.tick_params(axis="y", labelsize=14*fontscale)
 	plt.tight_layout()
@@ -2206,7 +2217,7 @@ def plotCompareSample(sspec,models,chain,nsample=50,relchi=1.2,method='samples',
 	if verbose==True: plt.show()
 	return
 
-def plotChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
+def plotChains(dpfit,plotpars,pbest={},outfile='',xlabel='Step',labeldict=PARAMETER_PLOT_LABELS,verbose=ERROR_CHECKING):
 	nplot = int(len(plotpars))
 	if nplot==0: 
 		if verbose==True: print('WARNING: no parameters to plot')
@@ -2227,8 +2238,8 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',verbose=ERROR_CHECKING):
 			ax.plot([numpy.argmin(dpfit['chis']),numpy.argmin(dpfit['chis'])],[numpy.nanmin(dpfit[l]),numpy.nanmax(dpfit[l])],'m--')
 			ax.set_title(dpfit.loc[numpy.argmin(dpfit['chis']),l])
 # labels and ticks
-		ax.set_xlabel('Step',fontsize=14)
-		if l in list(PARAMETER_PLOT_LABELS.keys()): ax.set_ylabel(PARAMETER_PLOT_LABELS[l],fontsize=14)
+		ax.set_xlabel(xlabel,fontsize=14)
+		if l in list(labeldict.keys()): ax.set_ylabel(labeldict[l],fontsize=14)
 		else: ax.set_ylabel(l,fontsize=14)
 		ax.tick_params(axis="x", labelsize=14)
 		ax.tick_params(axis="y", labelsize=14)
@@ -2269,7 +2280,7 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 # generate plot
 	plt.clf()
 	fig = corner.corner(dpplot,quantiles=[0.16, 0.5, 0.84], labels=plabels, show_titles=True, weights=weights, \
-						title_kwargs={"fontsize": 12},label_kwargs={'fontsize': 12}, smooth=1,truths=truths, \
+						labelpad=0, title_kwargs={"fontsize": 14},label_kwargs={'fontsize': 14}, smooth=1,truths=truths, \
 						truth_color='m',verbose=verbose)
 	plt.tight_layout()
 	if outfile!='': fig.savefig(outfile)
