@@ -3,13 +3,32 @@
 
 ## INSTALLATION NOTES
 
-ucdmcmc can be installed by git clone:
+### Install UCDMCMC
 
-git clone
+ucdmcmc can be installed from git:
 
-cd ucdmcmc
+	```
+	git clone
+	cd ucdmcmc
+	python -m setup.py install
+	```
 
-python -m setup.py install
+A check that this worked is that you can import ucdmcmc into python/jupyter noteobook, and that the ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
 
-a check is that ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
-altnerately ucdmcmc.modelInfo() returns models
+### Install SPLAT
+
+For the interim, you will also need to install SPLAT to work with the spectral data files - this is not automatically installed on setup. The instructions are essentially the same:
+
+	```
+	git clone https://github.com/aburgasser/splat.git
+	cd splat
+	python -m pip install .
+	```
+
+## Usage
+
+[tbd examples]
+
+## Generating models
+
+[tbd demonstration]
