@@ -12,6 +12,7 @@ Requires-Dist: glob
 Requires-Dist: matplotlib
 Requires-Dist: numpy
 Requires-Dist: pandas
+Requires-Dist: requests
 Requires-Dist: scipy
 Requires-Dist: statsmodels
 Requires-Dist: tqdm

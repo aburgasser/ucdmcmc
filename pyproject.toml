@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib",
     "numpy",
     "pandas",
+    "requests",
     "scipy",
     "statsmodels",
     "tqdm",
