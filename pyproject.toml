@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools","setuptools-scm"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -38,5 +38,3 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "*" = ["*.h5","*.csv"] # includes the data files in models/
-
-[tool.setuptools_scm]
