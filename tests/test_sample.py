@@ -1,7 +1,7 @@
 import os
 import glob
-import splat
-from ucdmcmc import DEFINED_INSTRUMENTS,getSample,readWave,resample
+#import splat
+from ucdmcmc import DEFINED_INSTRUMENTS,getSample,readWave,resample, Spectrum
 
 VERBOSE=True
 
@@ -10,7 +10,7 @@ def test_sample():
 	for instr in list(DEFINED_INSTRUMENTS.keys()):
 		if DEFINED_INSTRUMENTS[instr]['sample']!='':
 			sp = getSample(instr,verbose=VERBOSE)
-			assert isinstance(sp,splat.core.Spectrum)
+			assert isinstance(sp,Spectrum)
 
 # check spectral re-sampling
 def test_resample():

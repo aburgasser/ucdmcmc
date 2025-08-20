@@ -2,9 +2,10 @@ import os
 import glob
 import pandas
 import numpy
-import splat
+#import splat
 from ucdmcmc import MODEL_FOLDER,MODEL_FILE_PREFIX,DEFINED_SPECTRAL_MODELS,DEFINED_INSTRUMENTS,WAVE_FILE_PREFIX
 from ucdmcmc import checkName,isUnit,readWave,readModelSet,getModelSet,getGridModel,getInterpModel
+from ucdmcmc import Spectrum
 
 VERBOSE = True
 
@@ -53,7 +54,7 @@ def test_models():
 # get one of the grid models (default parameters)
 				par = DEFINED_SPECTRAL_MODELS[mdl]['default']
 				msp = getGridModel(fluxes,par,wave,verbose=VERBOSE)
-				assert isinstance(msp,splat.core.Spectrum)
+				assert isinstance(msp,Spectrum)
 				assert len(msp.wave)==len(wave)
 				for x in list(DEFINED_SPECTRAL_MODELS[mdl]['default'].keys()):
 					print(x,msp.parameters[x],DEFINED_SPECTRAL_MODELS[mdl]['default'][x])
