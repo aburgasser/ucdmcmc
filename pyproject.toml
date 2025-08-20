@@ -4,11 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ucdmcmc"
+description = "MCMC fitting code for low temperature atmosphere spectra"
+authors = [
+  {name = "Adam Burgasser", email = "aburgasser@ucsd.edu"},
+]
+maintainers = [
+  {name = "Adam Burgasser", email = "aburgasser@ucsd.edu"},
+]
 #version = "v1.0.1"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "astropy",
@@ -25,6 +36,12 @@ dependencies = [
     "importlib_resources; python_version < '3.7'",
 ]
 
+[project.urls]
+Repository = "https://github.com/aburgasser/ucdmcmc.git"
+Issues = "https://github.com/aburgasser/ucdmcmc/issues"
+
+license-files = ["LICENSE"]
+
 dynamic = ["version"]
 
 [project.optional-dependencies]
@@ -38,3 +55,4 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "*" = ["*.h5","*.csv"] # includes the data files in models/
+
