@@ -1,5 +1,5 @@
 import os
-import glob
+#import glob
 #import splat
 from ucdmcmc import DEFINED_INSTRUMENTS,getSample,readWave,resample, Spectrum
 

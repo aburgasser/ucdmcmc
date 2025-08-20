@@ -8,7 +8,6 @@ License-File: LICENSE
 Requires-Dist: astropy
 Requires-Dist: astroquery
 Requires-Dist: corner
-Requires-Dist: glob
 Requires-Dist: matplotlib
 Requires-Dist: numpy
 Requires-Dist: pandas

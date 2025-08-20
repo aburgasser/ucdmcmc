@@ -1,7 +1,6 @@
 astropy
 astroquery
 corner
-glob
 matplotlib
 numpy
 pandas
