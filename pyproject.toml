@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ucdmcmc"
-#version = "2024.08.08"
+version = "v1.0.1"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [

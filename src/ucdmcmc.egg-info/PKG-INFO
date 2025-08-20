@@ -1,6 +1,4 @@
-Metadata-Version: 2.1
 Name: ucdmcmc
-Version: 0.1
 Classifier: Programming Language :: Python :: 3
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown

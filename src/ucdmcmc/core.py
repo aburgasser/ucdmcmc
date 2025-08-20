@@ -90,7 +90,8 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '19 August 2025'
+VERSION = '2025.08.19'
+__version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -1795,8 +1796,8 @@ STOPPED HERE
 				elif method.lower() in ['integrate','int']:
 					wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
+						flx[i] = numpy.trapezoid(wts*flx0s[wn],wv0s[wn])/numpy.trapezoid(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapezoid(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapezoid(wts,wv0s[wn]))**0.5
 					else:
 						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
@@ -1804,13 +1805,13 @@ STOPPED HERE
 					wts = 1./unc0s[wn]**2
 					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
+						flx[i] = numpy.trapezoid(wts*flx0s[wn],wv0s[wn])/numpy.trapezoid(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapezoid(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapezoid(wts,wv0s[wn]))**0.5
 					else:
 						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
-					# unc[i] = (numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
-					# flx[i] = numpy.trapz(flx0[wn],wv0[wn])/numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])
+					# unc[i] = (numpy.trapezoid(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapezoid(1/unc0[wn]**2,wv0[wn]))**0.5
+					# flx[i] = numpy.trapezoid(flx0[wn],wv0[wn])/numpy.trapezoid(numpy.ones(len(wv0[wn])),wv0[wn])
 # median by default
 				else:
 					flx[i] = numpy.nanmedian(flx0s[wn])
