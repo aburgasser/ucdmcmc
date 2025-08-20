@@ -2,14 +2,14 @@ Metadata-Version: 2.1
 Name: ucdmcmc
 Version: 0.1
 Classifier: Programming Language :: Python :: 3
-Requires-Python: >=3.10
+Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: astropy
 Requires-Dist: astroquery
 Requires-Dist: corner
 Requires-Dist: matplotlib
-Requires-Dist: numpy
+Requires-Dist: numpy>=2.0
 Requires-Dist: pandas
 Requires-Dist: requests
 Requires-Dist: scipy

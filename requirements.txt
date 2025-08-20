@@ -2,8 +2,9 @@ astropy
 astroquery
 corner
 matplotlib
-numpy
+numpy>=2.0
 pandas
+pytables
 scipy
 statsmodels
 tqdm
