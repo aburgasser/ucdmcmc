@@ -11,6 +11,7 @@ Requires-Dist: corner
 Requires-Dist: matplotlib
 Requires-Dist: numpy>=2.0
 Requires-Dist: pandas
+Requires-Dist: pytables
 Requires-Dist: requests
 Requires-Dist: scipy
 Requires-Dist: statsmodels
