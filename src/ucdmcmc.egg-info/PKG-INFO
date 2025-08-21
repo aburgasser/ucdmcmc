@@ -6,6 +6,7 @@ License-File: LICENSE
 Requires-Dist: astropy
 Requires-Dist: astroquery
 Requires-Dist: corner
+Requires-Dist: emcee
 Requires-Dist: matplotlib
 Requires-Dist: numpy<2.0
 Requires-Dist: pandas

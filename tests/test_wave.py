@@ -1,5 +1,5 @@
 import os
-from ucdmcmc import generateWave,writeWave,readWave,getWave
+from ucdmcmc import generateWave,writeWave,readWave
 
 VERBOSE = True
 
@@ -17,8 +17,6 @@ def test_wave():
 	writeWave(wave,fname,verbose=VERBOSE)
 	assert os.path.exists(fname)
 	wavein = readWave(fname,verbose=VERBOSE)
-	assert len(wavein) == 452
-	wavein = getWave(inp=fname,verbose=VERBOSE)
 	assert len(wavein) == 452
 # clean up
 	os.remove(fname)

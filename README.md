@@ -22,6 +22,20 @@ It is recommended that you install in a conda environment to ensure the dependen
 
 A check that this worked is that you can import `ucdmcmc` into python/jupyter noteobook, and that the `ucdmcmc.MODEL_FOLDER` points to the models folder that was downloaded
 
+`ucdmcmc` uses the following extenal packages:
+* `astropy`
+* `astroquery`
+* `corner`
+* `emcee`
+* `matplotlib`
+* `numpy<2.0`
+* `pandas`
+* `tables`
+* `requests`
+* `scipy`
+* `statsmodels`
+* `tqdm`
+
 ### Optionally install SPLAT
 
 To generate new model sets using the built-in `generateModels()` function, you will need to install `SPLAT` (note: this is not necessary for the other functionality in this code). `SPLAT` is not automatically installed on setup. The instructions are essentially the same:
