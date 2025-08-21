@@ -53,8 +53,7 @@ test = [
 include-package-data = true
 
 [tool.setuptools.package-data]
-#"*" = ["*.h5","*.csv"] # includes the data files in models/
-"*" = ["*.csv"] # only download the .csv files in spectra/
+"*" = ["*.h5","*.csv"] # includes the data files in models/
 
 [tool.setuptools_scm]
 
