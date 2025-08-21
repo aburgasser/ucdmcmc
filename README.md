@@ -5,26 +5,20 @@
 
 ucdmcmc can be installed from pip:
 
-	```
 	pip install ucdmcmc
-	```
 
 or from git:
 
-	```
 	git clone
 	cd ucdmcmc
 	python -m setup.py install
-	```
 
 
 It is recommended that you install in a conda environment to ensure the dependencies do not conflict with your own installation
 
-	```
 	conda create -n ucdmcmc python=3.13
 	conda activate ucdmcmc
 	pip install ucdmcmc
-	```
 
 A check that this worked is that you can import ucdmcmc into python/jupyter noteobook, and that the ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
 
@@ -32,11 +26,9 @@ A check that this worked is that you can import ucdmcmc into python/jupyter note
 
 To generate new model sets using the built-in ``generateModels()` function, you will need to install SPLAT (note: this is not necessary for the other functionality in this code). SPLAT is not automatically installed on setup. The instructions are essentially the same:
 
-	```
 	git clone https://github.com/aburgasser/splat.git
 	cd splat
 	python -m pip install .
-	```
 
 ## Models
 
