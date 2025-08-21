@@ -1,9 +1,9 @@
 # UCDMCMC
- UCD MCMC model fitting code
+ Markov Chain Monte Carlo (MCMC) fitting code for low-temperature stars, brown dwarfs ande extrasolar planet spectra, tuned particularly to the near-infrared.
 
 ## INSTALLATION NOTES
 
-ucdmcmc can be installed from pip:
+`ucdmcmc` can be installed from pip:
 
 	pip install ucdmcmc
 
@@ -20,23 +20,25 @@ It is recommended that you install in a conda environment to ensure the dependen
 	conda activate ucdmcmc
 	pip install ucdmcmc
 
-A check that this worked is that you can import ucdmcmc into python/jupyter noteobook, and that the ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
+A check that this worked is that you can import `ucdmcmc` into python/jupyter noteobook, and that the `ucdmcmc.MODEL_FOLDER` points to the models folder that was downloaded
 
 ### Optionally install SPLAT
 
-To generate new model sets using the built-in ``generateModels()` function, you will need to install SPLAT (note: this is not necessary for the other functionality in this code). SPLAT is not automatically installed on setup. The instructions are essentially the same:
+To generate new model sets using the built-in `generateModels()` function, you will need to install `SPLAT` (note: this is not necessary for the other functionality in this code). `SPLAT` is not automatically installed on setup. The instructions are essentially the same:
 
 	git clone https://github.com/aburgasser/splat.git
 	cd splat
 	python -m pip install .
 
+See https://github.com/aburgasser/splat for additional instructions
+
 ## Models
 
-ucdmcmc comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/
+`ucdmcmc` comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/
 
 ## Spectra
 
-ucdmcmc comes with a starter set of spectra for the following instruments:
+`ucdmcmc` comes with a starter set of spectra for the following instruments:
 * EUCLID: TBD
 * NIR: TRAPPIST1 spectrum from Davoudi et al. (2024) https://ui.adsabs.harvard.edu/abs/2024ApJ...970L...4D/abstract
 * SPEX-PRISM: 2MASS J0559-1404 from Burgasser et al. (2006) https://ui.adsabs.harvard.edu/abs/2006ApJ...637.1067B/abstract
@@ -48,4 +50,13 @@ ucdmcmc comes with a starter set of spectra for the following instruments:
 ## Usage
 
 [TBD examples]
+
+## Citing the code
+
+[TBD]
+
+`ucdmcmc` and its antecedents has been used in the following publications:
+
+* Burgasser et al. (2024): https://ui.adsabs.harvard.edu/abs/2024ApJ...962..177B/abstract
+* Lueber & Burgasser (2025): https://ui.adsabs.harvard.edu/abs/2025ApJ...988...31L/abstract
 

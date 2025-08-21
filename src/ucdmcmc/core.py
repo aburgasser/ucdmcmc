@@ -48,41 +48,27 @@
 # - add in examples for JWST MIRI LRS and NIRSPEC G395H
 # - comparison plot with x and y log scales
 
-# MCMC model fitting code
+# basic packages
 import copy
-import corner
 import glob
-#import h5py
-import matplotlib.pyplot as plt
-import numpy
 import os
 import sys
+
+# external packages
+#from astropy.coordinates import SkyCoord, EarthLocation, CartesianRepresentation, CartesianDifferential, Galactic, Galactocentric
+import astropy.constants as const
+from astropy.io import fits
+import astropy.units as u
+import corner
+import emcee
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas
 import requests
 from scipy.interpolate import griddata
-#from scipy.optimize import minimize,curve_fit
 import scipy.stats as stats
-from tqdm import tqdm
-from astropy.io import fits
-from astropy.coordinates import SkyCoord, EarthLocation, CartesianRepresentation, CartesianDifferential, Galactic, Galactocentric
-# import splat
-# import splat.model as spmdl
-import astropy.units as u
-import astropy.constants as const
 from statsmodels.stats.weightstats import DescrStatsW
-
-
-#######################################################
-###############   INSTALLATION NOTES  #################
-#######################################################
-
-# git clone
-# cd ucdmcmc
-# python -m setup.py install
-
-# a check is that ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
-# altnerately ucdmcmc.modelInfo() returns models
-
+from tqdm import tqdm
 
 
 #######################################################
@@ -117,7 +103,7 @@ DEFAULT_PARAMETERS_NAME = 'noise'
 
 # baseline wavelength grid
 DEFAULT_WAVE_RANGE = [0.9,2.45]
-DEFAULT_RESOULTION = 300
+DEFAULT_RESOLUTION = 300
 
 # parameters
 PARAMETER_PLOT_LABELS = {
@@ -384,11 +370,11 @@ def isNumber(s):
 	s1 = copy.deepcopy(s)
 	if isinstance(s1,bool): return False
 	if isinstance(s1,u.quantity.Quantity): s1 = s1.value
-	if isinstance(s1,float): return (True and not numpy.isnan(s1))
-	if isinstance(s1,int): return (True and not numpy.isnan(s1))
+	if isinstance(s1,float): return (True and not np.isnan(s1))
+	if isinstance(s1,int): return (True and not np.isnan(s1))
 	try:
 		s1 = float(s1)
-		return (True and not numpy.isnan(s1))
+		return (True and not np.isnan(s1))
 	except:
 		return False
 
@@ -425,25 +411,25 @@ def lsfRotation(vsini,vsamp,epsilon=0.6,verbose=ERROR_CHECKING):
 	'''
 # limb darkening parameters
 	e1 = 2. * (1. - epsilon)
-	e2 = numpy.pi * epsilon/2.
-	e3 = numpy.pi * (1. - epsilon/3.)
+	e2 = np.pi * epsilon/2.
+	e3 = np.pi * (1. - epsilon/3.)
 
 # vsini must be > vsamp - if not, return a delta function
 	if vsini <= vsamp:
 		if verbose==True: print('\nWarning: velocity sampling {} is broader than vsini {}; returning delta function')  
-		lsf = numpy.zeros(5)  
+		lsf = np.zeros(5)  
 		lsf[2] = 1.
 		return lsf
 
 # generate LSF
-	nsamp = numpy.ceil(2.*vsini/vsamp)
+	nsamp = np.ceil(2.*vsini/vsamp)
 	if nsamp % 2 == 0:
 		nsamp+=1
-	x = numpy.arange(nsamp)-(nsamp-1.)/2.
+	x = np.arange(nsamp)-(nsamp-1.)/2.
 	x = x*vsamp/vsini
-	x2 = numpy.absolute(1.-x**2)
+	x2 = np.absolute(1.-x**2)
 
-	return (e1*numpy.sqrt(x2) + e2*x2)/e3
+	return (e1*np.sqrt(x2) + e2*x2)/e3
 
 
 # SPECTRUM READING ROUTINE
@@ -495,16 +481,16 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 		with fits.open(os.path.normpath(file),ignore_missing_end=True,ignore_missing_simple=True,do_not_scale_image_data=True) as hdu:
 			hdu.verify('silentfix+ignore')
 			header = hdu[hdunum].header
-			if 'NAXIS3' in list(header.keys()): d = numpy.copy(hdu[hdunum].data[0,:,:])
-			else: d =  numpy.copy(hdu[hdunum].data)
+			if 'NAXIS3' in list(header.keys()): d = np.copy(hdu[hdunum].data[0,:,:])
+			else: d =  np.copy(hdu[hdunum].data)
 # make sure file is oriented correctly
-		if numpy.shape(d)[0]>numpy.shape(d)[1]: d = numpy.transpose(d)
+		if np.shape(d)[0]>np.shape(d)[1]: d = np.transpose(d)
 
 # wavelength is in header 
 		if waveheader==True and 'fit' in file_type and len(d[:,0])<3:
 			flux = d[0,:]
 			if crval1 in list(header.keys()) and cdelt1 in list(header.keys()):
-				wave = numpy.polyval([float(header[cdelt1]),float(header[crval1])],numpy.arange(len(flux)))
+				wave = np.polyval([float(header[cdelt1]),float(header[crval1])],np.arange(len(flux)))
 			else: 
 				raise ValueError('\nCannot find {} and {} keywords in header of fits file {}'.format(crval1,cdelt1,file))
 # wavelength is explicitly in data array 
@@ -512,7 +498,7 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 			wave = d[0,:]
 			flux = d[1,:]
 		if len(d[:,0]) > 2: noise = d[2,:]
-		else: noise = [numpy.nan]*len(wave)
+		else: noise = [np.nan]*len(wave)
 
 # ascii - can be done with pandas as local or online and w/ or w/o gzip/bzip2/pkzip
 	else:
@@ -532,10 +518,10 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 				for i in range(len(dp.columns))-3: cnames.append('c{}'.format(i))
 			dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,names=cnames)
 # assume order wave, flux, noise
-		wave = numpy.array(dp[dp.columns[0]])
-		flux = numpy.array(dp[dp.columns[1]])
-		if len(dp.columns)>2: noise = numpy.array(dp[dp.columns[2]])
-		else: noise = [numpy.nan]*len(dp)
+		wave = np.array(dp[dp.columns[0]])
+		flux = np.array(dp[dp.columns[1]])
+		if len(dp.columns)>2: noise = np.array(dp[dp.columns[2]])
+		else: noise = [np.nan]*len(dp)
 # placeholder header
 		header = fits.Header()	  # blank header
 
@@ -543,9 +529,9 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 	if 'wavelog'==True: wave = 10.**wave
 
 # final output dictionary
-	output['wave'] = numpy.array(wave)
-	output['flux'] = numpy.array(flux) 
-	output['noise'] = numpy.array(noise)
+	output['wave'] = np.array(wave)
+	output['flux'] = np.array(flux) 
+	output['noise'] = np.array(noise)
 	output['header'] = header
 
 # make sure arrays have units
@@ -558,14 +544,14 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 
 # remove all parts of spectrum that are nans
 	if remove_nans==True:
-		w = numpy.where(numpy.logical_and(numpy.isnan(output['wave']) == False,numpy.isnan(output['flux']) == False))
+		w = np.where(np.logical_and(np.isnan(output['wave']) == False,np.isnan(output['flux']) == False))
 		output['wave'] = output['wave'][w]
 		output['flux'] = output['flux'][w]
 		output['noise'] = output['noise'][w]
 
 # force places where noise is zero to be NaNs
 	if no_zero_noise==True:
-		output['noise'][numpy.where(output['noise'] == 0.)] = numpy.nan
+		output['noise'][np.where(output['noise'] == 0.)] = np.nan
 
 	return output
 
@@ -588,9 +574,9 @@ class Spectrum(object):
 	def __init__(self, *args, verbose=ERROR_CHECKING, **kwargs):
 		self.name = kwargs.get('name','')
 		self.instrument = kwargs.get('instrument','')
-		self.wave = kwargs.get('wave',numpy.array([]))
-		self.flux = kwargs.get('flux',numpy.array([]))
-		self.noise = kwargs.get('noise',numpy.array([]))
+		self.wave = kwargs.get('wave',np.array([]))
+		self.flux = kwargs.get('flux',np.array([]))
+		self.noise = kwargs.get('noise',np.array([]))
 		self.filename = ''
 		for x in ['file','filename','input']: self.filename = kwargs.get(x,self.filename)
 
@@ -609,8 +595,8 @@ class Spectrum(object):
 # option 3: multiple lists or numpy arrays are given
 # interpret as wave, flux, and optionally noise
 		elif len(args) > 1:
-			if (isinstance(args[0],list) or isinstance(args[0],numpy.ndarray)) and \
-				(isinstance(args[1],list) or isinstance(args[1],numpy.ndarray)):
+			if (isinstance(args[0],list) or isinstance(args[0],np.ndarray)) and \
+				(isinstance(args[1],list) or isinstance(args[1],np.ndarray)):
 				self.wave = args[0]
 				self.flux = args[1]
 			else:
@@ -618,7 +604,7 @@ class Spectrum(object):
 				empty=True
 
 			if len(args) > 2:
-				if isinstance(args[2],list) or isinstance(args[2],numpy.ndarray):
+				if isinstance(args[2],list) or isinstance(args[2],np.ndarray):
 					self.noise = args[2]
 		else:
 			pass
@@ -640,15 +626,15 @@ class Spectrum(object):
 
 # process spectral data
 # convert to numpy arrays
-		if not isinstance(self.wave,numpy.ndarray): self.wave = numpy.array(self.wave)
-		if not isinstance(self.flux,numpy.ndarray): self.flux = numpy.array(self.flux)
-#		if len(self.noise)==0: self.noise = [numpy.nan]*len(self.wave)
-		if not isinstance(self.noise,numpy.ndarray): self.noise = numpy.array(self.noise)
+		if not isinstance(self.wave,np.ndarray): self.wave = np.array(self.wave)
+		if not isinstance(self.flux,np.ndarray): self.flux = np.array(self.flux)
+#		if len(self.noise)==0: self.noise = [np.nan]*len(self.wave)
+		if not isinstance(self.noise,np.ndarray): self.noise = np.array(self.noise)
 
 # assure wave, flux, noise have units
-		if not isUnit(self.wave): self.wave = numpy.array(self.wave)*self.wave.unit
-		if not isUnit(self.flux): self.flux = numpy.array(self.flux)*self.flux.unit
-		if not isUnit(self.noise): self.noise = numpy.array(self.noise)*self.flux.unit
+		if not isUnit(self.wave): self.wave = np.array(self.wave)*self.wave.unit
+		if not isUnit(self.flux): self.flux = np.array(self.flux)*self.flux.unit
+		if not isUnit(self.noise): self.noise = np.array(self.noise)*self.flux.unit
 
 # create a copy to store as the original
 		self.original = copy.deepcopy(self)
@@ -726,7 +712,7 @@ class Spectrum(object):
 
 # # make a copy and identify wavelength range that is overlapping
 		sp = copy.deepcopy(self)
-#		 sp.wave = self.wave.value[numpy.where(numpy.logical_and(self.wave.value < numpy.nanmax(other.wave.value),self.wave.value > numpy.nanmin(other.wave.value)))]
+#		 sp.wave = self.wave.value[np.where(np.logical_and(self.wave.value < np.nanmax(other.wave.value),self.wave.value > np.nanmin(other.wave.value)))]
 #		 sp.wave=sp.wave*self.wave_unit
 
 # # generate interpolated axes
@@ -773,7 +759,7 @@ class Spectrum(object):
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
-#		 sp.wave = self.wave.value[numpy.where(numpy.logical_and(self.wave.value < numpy.nanmax(other.wave.value),self.wave.value > numpy.nanmin(other.wave.value)))]
+#		 sp.wave = self.wave.value[np.where(np.logical_and(self.wave.value < np.nanmax(other.wave.value),self.wave.value > np.nanmin(other.wave.value)))]
 # # this fudge is for astropy 1.*
 #		 if not isUnit(sp.wave):
 #			 sp.wave=sp.wave*self.wave.unit
@@ -821,7 +807,7 @@ class Spectrum(object):
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
-		# sp.wave = self.wave.value[numpy.where(numpy.logical_and(self.wave.value < numpy.nanmax(other.wave.value),self.wave.value > numpy.nanmin(other.wave.value)))]
+		# sp.wave = self.wave.value[np.where(np.logical_and(self.wave.value < np.nanmax(other.wave.value),self.wave.value > np.nanmin(other.wave.value)))]
 		# sp.wave=sp.wave*self.wave.unit
 
 # generate interpolated axes
@@ -831,13 +817,13 @@ class Spectrum(object):
 		# n2 = interp1d(other.wave.value,other.variance.value,bounds_error=False,fill_value=0.)
 
 # multiply & uncertainty
-#		sp.flux = numpy.multiply(numpy.array(f1(sp.wave.value)),numpy.array(f2(sp.wave.value)))*self.flux.unit*other.flux.unit
-		sp.flux = numpy.multiply(sp.flux.value,sp.noise.value)*self.flux.unit*other.flux.unit
+#		sp.flux = np.multiply(np.array(f1(sp.wave.value)),np.array(f2(sp.wave.value)))*self.flux.unit*other.flux.unit
+		sp.flux = np.multiply(sp.flux.value,sp.noise.value)*self.flux.unit*other.flux.unit
 # uncertainty
-		# sp.variance = numpy.multiply(sp.flux**2,((numpy.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(numpy.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
+		# sp.variance = np.multiply(sp.flux**2,((np.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(np.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
 		# sp.variance=sp.variance*((self.flux.unit*other.flux.unit)**2)
 		# sp.noise = sp.variance**0.5
-		sp.noise = (numpy.multiply(sp.flux.value**2,((numpy.divide(self.noise.value,self.flux.value)**2)+(numpy.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
 		# sp.cleanNoise()
 
 # update information
@@ -871,7 +857,7 @@ class Spectrum(object):
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
-		# sp.wave = self.wave.value[numpy.where(numpy.logical_and(self.wave.value < numpy.nanmax(other.wave.value),self.wave.value > numpy.nanmin(other.wave.value)))]
+		# sp.wave = self.wave.value[np.where(np.logical_and(self.wave.value < np.nanmax(other.wave.value),self.wave.value > np.nanmin(other.wave.value)))]
 		# sp.wave=sp.wave*self.wave.unit
 
 # generate interpolated axes
@@ -881,15 +867,15 @@ class Spectrum(object):
 		# n2 = interp1d(other.wave.value,other.variance.value,bounds_error=False,fill_value=0.)
 
 # divide & uncertainty
-#		sp.flux = numpy.divide(numpy.array(f1(sp.wave.value)),numpy.array(f2(sp.wave.value)))*(self.flux.unit/other.flux.unit)
-		sp.flux = numpy.divide(sp.flux.value,sp.noise.value)*self.flux.unit/other.flux.unit
-		# sp.variance = numpy.multiply(sp.flux**2,((numpy.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(numpy.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
+#		sp.flux = np.divide(np.array(f1(sp.wave.value)),np.array(f2(sp.wave.value)))*(self.flux.unit/other.flux.unit)
+		sp.flux = np.divide(sp.flux.value,sp.noise.value)*self.flux.unit/other.flux.unit
+		# sp.variance = np.multiply(sp.flux**2,((np.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(np.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
 		# sp.variance=sp.variance*((self.flux.unit/other.flux.unit)**2)
 		# sp.noise = sp.variance**0.5
-		sp.noise = (numpy.multiply(sp.flux.value**2,((numpy.divide(self.noise.value,self.flux.value)**2)+(numpy.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
 
 # clean up infinities
-		sp.flux = (numpy.where(numpy.absolute(sp.flux.value) == numpy.inf, numpy.nan, sp.flux.value))*self.flux.unit/other.flux.unit
+		sp.flux = (np.where(np.absolute(sp.flux.value) == np.inf, np.nan, sp.flux.value))*self.flux.unit/other.flux.unit
 #		sp.cleanNoise()
 
 # update information
@@ -979,13 +965,13 @@ class Spectrum(object):
 
 # fits file
 		if 'fit' in file_type:
-			data = numpy.vstack((self.wave.value,self.flux.value,self.noise.value))
+			data = np.vstack((self.wave.value,self.flux.value,self.noise.value))
 			hdu = fits.PrimaryHDU(data)
 			for k in list(self.header.keys()):
 				if k.upper() not in ['HISTORY','COMMENT','BITPIX','NAXIS','NAXIS1','NAXIS2','EXTEND'] and k.replace('#','') != '': # and k not in list(hdu.header.keys()):
 					hdu.header[k] = str(self.header[k])
 			for k in list(self.__dict__.keys()):
-				if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and numpy.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
+				if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and np.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
 					hdu.header[k.upper()] = str(self.__getattribute__(k))
 			hdu.writeto(filename,overwrite=clobber)
 
@@ -1000,7 +986,7 @@ class Spectrum(object):
 					if k.upper() not in ['HISTORY','COMMENT'] and k.replace('#','') != '':
 						f.write('{}{} = {}\n'.format(comment,k.upper(),self.header[k]))
 				for k in list(self.__dict__.keys()):
-					if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and numpy.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
+					if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and np.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
 						f.write('{}{} = {}\n'.format(comment,k.upper(),self.__getattribute__(k)))
 			if save_noise == True:
 				f.write('{}{}{}{}{}{}\n'.format(comment,wave_name,delimiter,flux_name,delimiter,noise_name))
@@ -1087,9 +1073,9 @@ class Spectrum(object):
 			s.to(self.wave.unit)
 			self.wave = self.wave.value+s
 		else: 
-			self.wave = numpy.roll(self.wave,s)
-			if s > 0: self.wave[:s] = numpy.nan
-			if s < 0: self.wave[s:] = numpy.nan
+			self.wave = np.roll(self.wave,s)
+			if s > 0: self.wave[:s] = np.nan
+			if s < 0: self.wave[s:] = np.nan
 		return
 
 
@@ -1150,7 +1136,7 @@ class Spectrum(object):
 # determine velocity sampling
 		if not isUnit(vbroad): vbroad=vbroad*(u.km/u.s)
 		vbroad.to(u.km/u.s)
-		samp = numpy.nanmedian(numpy.absolute(self.wave.value-numpy.roll(self.wave.value,1)) / self.wave.value)
+		samp = np.nanmedian(np.absolute(self.wave.value-np.roll(self.wave.value,1)) / self.wave.value)
 		vsamp = (samp*const.c).to(u.km/u.s)
 
 # velocity resolution is too low - use a delta function
@@ -1173,15 +1159,15 @@ class Spectrum(object):
 # NOTE: THIS IS CURRENTLY NOT FUNCTIONAL
 # gaussian ±10 sigma
 			elif 'gauss' in method.lower():
-				n = numpy.ceil(20.*vbroad.value/vsamp.value)
+				n = np.ceil(20.*vbroad.value/vsamp.value)
 				if n%2==0: n+=1
-				x = numpy.arange(n)-0.5*(n-1.)
-				kern = numpy.exp(-0.5*(x**2))
+				x = np.arange(n)-0.5*(n-1.)
+				kern = np.exp(-0.5*(x**2))
 				report = 'Broadened spectrum using a Gaussian with velocity width {}'.format(vbroad)
 
 # delta function (no smoothing)
 			else:
-				kern = numpy.zeros(5)
+				kern = np.zeros(5)
 				kern[2] = 1.
 				report = 'Applying delta line spread function (no broadening)'
 
@@ -1189,14 +1175,14 @@ class Spectrum(object):
 				report = 'Broadened spectrum using a input line spread function'
 
 # normalize kernel
-		kern = kern/numpy.nansum(kern)
+		kern = kern/np.nansum(kern)
 
 # apply kernel
 #		flux_unit = self.flux.unit
-		a = (numpy.nanmax(self.wave.value)/numpy.nanmin(self.wave.value))**(1./len(self.wave))
-		nwave = numpy.nanmin(self.wave.value)*(a**numpy.arange(len(self.wave)))
+		a = (np.nanmax(self.wave.value)/np.nanmin(self.wave.value))**(1./len(self.wave))
+		nwave = np.nanmin(self.wave.value)*(a**np.arange(len(self.wave)))
 		nflux = self.flux.value*nwave
-		ncflux = numpy.convolve(nflux, kern, 'same')
+		ncflux = np.convolve(nflux, kern, 'same')
 		self.flux = (ncflux/nwave)*self.flux.unit
 		if verbose==True: print(report)
 
@@ -1264,27 +1250,27 @@ class Spectrum(object):
 		   <Quantity 1.591310977935791 erg / (cm2 micron s)>
 		'''
 		if len(limits) == 0:
-			limits = [numpy.nanmin(self.wave.value),numpy.nanmax(self.wave.value)]
+			limits = [np.nanmin(self.wave.value),np.nanmax(self.wave.value)]
 		elif len(limits) >= 2:
-			if not isinstance(limits,list) and not isinstance(limits,numpy.ndarray):
+			if not isinstance(limits,list) and not isinstance(limits,np.ndarray):
 				limits = [limits]
 			if isUnit(limits[0]): limits = [r.to(self.wave.unit).value for r in limits]
 			if isUnit(limits): limits = limits.to(self.wave.unit).value
-			if numpy.nanmax(limits) > numpy.nanmax(self.wave.value) or numpy.nanmin(limits) < numpy.nanmin(self.wave.value):
-				if verbose==True: print('\nWarning: normalization range {} is outside range of spectrum wave array: {}'.format(limits,[numpy.nanmin(self.wave.value),numpy.nanmax(self.wave.value)]))
+			if np.nanmax(limits) > np.nanmax(self.wave.value) or np.nanmin(limits) < np.nanmin(self.wave.value):
+				if verbose==True: print('\nWarning: normalization range {} is outside range of spectrum wave array: {}'.format(limits,[np.nanmin(self.wave.value),np.nanmax(self.wave.value)]))
 # method
-			if method in ['mean','average','ave']: scalefactor = numpy.nanmax(self.flux.value[numpy.where(numpy.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
-			elif method in ['max','maximum']: scalefactor = numpy.nanmax(self.flux.value[numpy.where(numpy.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
-			elif method in ['min','minimum']: scalefactor = numpy.nanmin(self.flux.value[numpy.where(numpy.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
-			elif method in ['mode']: scalefactor = numpy.nanmode(self.flux.value[numpy.where(numpy.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
-			else: scalefactor = numpy.nanmedian(self.flux.value[numpy.where(numpy.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
+			if method in ['mean','average','ave']: scalefactor = np.nanmax(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
+			elif method in ['max','maximum']: scalefactor = np.nanmax(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
+			elif method in ['min','minimum']: scalefactor = np.nanmin(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
+			elif method in ['mode']: scalefactor = np.nanmode(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
+			else: scalefactor = np.nanmedian(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
 # single value
 		else:
 			f = interp1d(self.wave.value,self.flux.value)
 			scalefactor = f(limits[0])
 		if isUnit(scalefactor): scalefactor = scalefactor.value
 		if scalefactor == 0. and verbose==True: print('\nWarning: normalize is attempting to divide by zero; ignoring')
-		elif numpy.isnan(scalefactor) == True and verbose==True: print('\nWarning: normalize is attempting to divide by nan; ignoring')
+		elif np.isnan(scalefactor) == True and verbose==True: print('\nWarning: normalize is attempting to divide by nan; ignoring')
 		else: self.scale(1./scalefactor)
 		return
 
@@ -1363,7 +1349,7 @@ class Spectrum(object):
 # get magnitude for filter
 		apmag,apmag_e = sphot.filterMag(self,filt,**kwargs)
 # NOTE: NEED TO INCORPORATE UNCERTAINTY INTO SPECTRAL UNCERTAINTY
-		if numpy.isnan(apmag)==False:
+		if np.isnan(apmag)==False:
 			self.scale(10.**(0.4*(apmag-mag)))
 		return
 
@@ -1385,20 +1371,20 @@ class Spectrum(object):
 		   >>> sp = splat.getSpectrum(lucky=True)[0]
 		   >>> sp.plot()
 		'''
-		strue = self.wave.value[numpy.isnan(self.flux.value)==False]
-		wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
+		strue = self.wave.value[np.isnan(self.flux.value)==False]
+		wrng = [np.nanmin(strue),np.nanmax(strue)]
 
 		plt.clf()
 		plt.figure(figsize=figsize)
 		plt.step(self.wave.value,self.flux.value,'k-',linewidth=2,label=self.name)
 		plt.legend(fontsize=14*fontscale,loc=legend_loc)
-		plt.plot([numpy.nanmin(self.wave.value),numpy.nanmax(self.wave.value)],[0,0],'k--')
+		plt.plot([np.nanmin(self.wave.value),np.nanmax(self.wave.value)],[0,0],'k--')
 		plt.fill_between(self.wave.value,self.noise.value,-1.*self.noise.value,color='k',alpha=0.3)
 		plt.xscale(xscale)
 		plt.yscale(yscale)
 		if ylim==None:
-			scl = numpy.nanmax(self.flux.value)
-			if yscale=='log': ylim = [numpy.nanmean(self.noise.value)/2.,2*scl]
+			scl = np.nanmax(self.flux.value)
+			if yscale=='log': ylim = [np.nanmean(self.noise.value)/2.,2*scl]
 			else: ylim = [x*scl for x in [-0.1,1.3]]
 		if xlim==None: xlim=wrng
 		plt.ylim(xlim)
@@ -1450,11 +1436,11 @@ class Spectrum(object):
 		report = 'Reddened following Cardelli, Clayton, and Mathis (1989) using A_V = {} and R_V = {}'.format(av,rv)
 
 		if normalize == True:
-			absfrac = absfrac/numpy.median(absfrac)
+			absfrac = absfrac/np.median(absfrac)
 			report = report+' and normalized'
 
-		self.flux = numpy.array(self.flux.value)*numpy.array(absfrac)*self.flux.unit
-		self.noise = numpy.array(self.noise.value)*numpy.array(absfrac)*self.noise.unit
+		self.flux = np.array(self.flux.value)*np.array(absfrac)*self.flux.unit
+		self.noise = np.array(self.noise.value)*np.array(absfrac)*self.noise.unit
 		if verbose==True: print(report)
 
 		return
@@ -1520,7 +1506,7 @@ class Spectrum(object):
 
 # single number = turn into small range
 		if isinstance(rng,float):
-			rng = [rng-0.01*(numpy.nanmax(self.wave.value)-numpy.nanmin(self.wave.value)),rng+0.01*(numpy.nanmax(self.wave.value)-numpy.nanmin(self.wave.value))]
+			rng = [rng-0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value)),rng+0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value))]
 
 		if not isinstance(rng,list): rng = list(rng)
 
@@ -1528,20 +1514,20 @@ class Spectrum(object):
 			try: rng = [r.to(self.wave.unit).value for r in rng]
 			except: raise ValueError('Could not convert trim range unit {} to spectrum wavelength unit {}'.format(rng.unit,self.wave.unit))
 
-		w = numpy.where(numpy.logical_and(self.wave.value >= rng[0],self.wave.value <= rng[1]))
+		w = np.where(np.logical_and(self.wave.value >= rng[0],self.wave.value <= rng[1]))
 		if len(w[0])>0:
-			if method.lower() in ['median','med']: val = numpy.nanmedian(self.flux.value[w])
-			elif method.lower() in ['mean','average','ave']: val = numpy.nanmean(self.flux.value[w])
-			elif method.lower() in ['max','maximum']: val = numpy.nanmax(self.flux.value[w])
-			elif method.lower() in ['min','minimum']: val = numpy.nanmin(self.flux.value[w])
-			elif method.lower() in ['std','stddev','stdev','rms']: val = numpy.nanstd(self.flux.value[w])
-			elif method.lower() in ['unc','uncertainty','noise','error']: val = numpy.nanmedian(self.noise.value[w])
-			elif method.lower() in ['sn','snr','signal-to-noise','s/n']: val = numpy.nanmedian(self.flux.value[w]/self.noise.value[w])
+			if method.lower() in ['median','med']: val = np.nanmedian(self.flux.value[w])
+			elif method.lower() in ['mean','average','ave']: val = np.nanmean(self.flux.value[w])
+			elif method.lower() in ['max','maximum']: val = np.nanmax(self.flux.value[w])
+			elif method.lower() in ['min','minimum']: val = np.nanmin(self.flux.value[w])
+			elif method.lower() in ['std','stddev','stdev','rms']: val = np.nanstd(self.flux.value[w])
+			elif method.lower() in ['unc','uncertainty','noise','error']: val = np.nanmedian(self.noise.value[w])
+			elif method.lower() in ['sn','snr','signal-to-noise','s/n']: val = np.nanmedian(self.flux.value[w]/self.noise.value[w])
 			else: raise ValueError('Did not recongize sampling method {}'.format(method))
 			return val
 		else:
 			if verbose==True: print('Sampling range {} outside wavelength range of data'.format(rng))
-			return numpy.nan
+			return np.nan
 
 
 	def trim(self,rng,**kwargs):
@@ -1573,7 +1559,7 @@ class Spectrum(object):
 		   124.51981
 		'''
 
-		mask = numpy.zeros(len(self.wave))
+		mask = np.zeros(len(self.wave))
 
 # some code to deal with various possibilities, ultimately leading to [ [r1a,r1b], [r2a,r2b], ...]
 # convert a unit-ed quantity
@@ -1583,7 +1569,7 @@ class Spectrum(object):
 
 # single number = turn into small range
 		if isinstance(rng,float):
-			rng = [rng-0.01*(numpy.nanmax(self.wave.value)-numpy.nanmin(self.wave.value)),rng+0.01*(numpy.nanmax(self.wave.value)-numpy.nanmin(self.wave.value))]
+			rng = [rng-0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value)),rng+0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value))]
 
 		if isUnit(rng[0]):
 			try: rng = [r.to(self.wave.unit).value for r in rng]
@@ -1595,7 +1581,7 @@ class Spectrum(object):
 			if isUnit(r[0]):
 				try: r = [x.to(self.wave.unit).value for x in r]
 				except: raise ValueError('Could not convert trim range unit {} to spectrum wavelength unit {}'.format(r[0].unit,self.wave.unit))
-			w = numpy.where(numpy.logical_and(self.wave.value > r[0],self.wave.value < r[1]))
+			w = np.where(np.logical_and(self.wave.value > r[0],self.wave.value < r[1]))
 		self.wave = self.wave[w]
 		self.flux = self.flux[w]
 		self.noise = self.noise[w]
@@ -1622,8 +1608,8 @@ class Modelset(object):
 		'''
 		Initializes a model set
 		'''
-		self.wave = kwargs.get('wave',numpy.array([]))
-		self.flux = kwargs.get('flux',numpy.array([]))
+		self.wave = kwargs.get('wave',np.array([]))
+		self.flux = kwargs.get('flux',np.array([]))
 		self.parameters = kwargs.get('parameters',pandas.DataFrame())
 		self.modelname = ''
 		for x in ['name','model','modelname']: self.modelname = kwargs.get(x,self.modelname)
@@ -1640,6 +1626,8 @@ class Modelset(object):
 		url = kwargs.get('url',MODEL_URL)
 		wavecol = kwargs.get('wavecol',DEFAULT_WAVE_NAME)
 		fluxcol = kwargs.get('fluxcol',DEFAULT_FLUX_NAME)
+		waveunit = kwargs.get('waveunit',DEFAULT_WAVE_UNIT)
+		fluxunit = kwargs.get('fluxunit',DEFAULT_FLUX_UNIT)
 
 # READ IN FLUXES AND PARAMETERS
 # one string argument - assume it is the filename
@@ -1656,8 +1644,8 @@ class Modelset(object):
 			tmp = self.filename
 			if os.path.exists(tmp)==False: tmp = os.path.join(MODEL_FOLDER,tmp)
 			if os.path.exists(tmp)==False: tmp = tmp.replace(MODEL_FOLDER,ALT_MODEL_FOLDER)
-			if os.path.exists(tmp)==False: 
 # if still not present try to download from url
+			if os.path.exists(tmp)==False: 
 				downloadModel(self.filename,os.path.join(url,'models',''),ALT_MODEL_FOLDER,verbose=ERROR_CHECKING)
 			if os.path.exists(tmp)==False: 
 				raise ValueError('Could not locate model file {}'.format(self.filename))
@@ -1668,7 +1656,7 @@ class Modelset(object):
 			if ftype in ['h5']:
 				dpm = pandas.read_hdf(self.filename)
 				if fluxcol not in list(dpm.columns): raise ValueError('Flux column name {} not present in data array; specifiy the correct column name with keyword `fluxcol=`'.format(fluxcol))
-				self.flux = numpy.array([numpy.array(x) for x in dpm[fluxcol]])
+				self.flux = np.array([np.array(x) for x in dpm[fluxcol]])*fluxunit
 				for x in [fluxcol,'instrument','bibcode','model','modelname']:
 					if x in list(dpm.columns): del dpm[x]
 				self.parameters = dpm
@@ -1685,6 +1673,9 @@ class Modelset(object):
 				tmp = self.wavefile
 				if os.path.exists(tmp)==False: tmp = os.path.join(MODEL_FOLDER,tmp)
 				if os.path.exists(tmp)==False: tmp = tmp.replace(MODEL_FOLDER,ALT_MODEL_FOLDER)
+# if still not present try to download from url
+				if os.path.exists(tmp)==False: 
+					downloadModel(self.wavefile,os.path.join(url,'models',''),ALT_MODEL_FOLDER,verbose=ERROR_CHECKING)
 				if os.path.exists(tmp)==False: 
 					if ERROR_CHECKING==True:
 						print('Cannot find wavefile {}; check filename or pass wavelength array')
@@ -1707,8 +1698,8 @@ class Modelset(object):
 						if isNumber(cols[0]):
 							dpw = pandas.read_csv(self.wavefile,delimiter=delimiter,names=wavecol)
 							cols = list(dpw.columns)
-						if wavecol in cols: self.wave = numpy.array(dpw[wavecol])
-						else: self.wave = numpy.array(dpw[cols[0]])
+						if wavecol in cols: self.wave = np.array(dpw[wavecol])*waveunit
+						else: self.wave = np.array(dpw[cols[0]])*waveunit
 		if len(self.wave)==0:
 			raise ValueError('Warning: wave array was not included; include keyword `wavefile` or pass wavelength array')
 
@@ -1716,9 +1707,11 @@ class Modelset(object):
 		if isinstance(self.parameters,pandas.core.frame.DataFrame)==False:
 			raise ValueError('Parameter array must be a pandas dataframe')
 		if len(self.wave) != len(self.flux[0,:]):
-			if ERROR_CHECKING==True: print('Warning! wavelength array has {:.0f} values but fluxes have {:.0f} values'.format(len(self.wave),len(self.flux[1])))
+			if ERROR_CHECKING==True: print('Warning! wavelength array has {:.0f} values but fluxes have {:.0f} values; you will have errors'.format(len(self.wave),len(self.flux[1])))
 		if len(self.flux[:,0]) != len(self.parameters):
-			if ERROR_CHECKING==True: print('Warning! flux array has {:.0f} spectra but there are {:.0f} parameter sets'.format(len(self.flux[1]),len(self.parameters)))
+			if ERROR_CHECKING==True: print('Warning! flux array has {:.0f} spectra but there are {:.0f} parameter sets; you will have errors'.format(len(self.flux[1]),len(self.parameters)))
+		if not isUnit(self.wave): self.wave = self.wave*waveunit
+		if not isUnit(self.flux): self.flux = self.flux*fluxunit
 
 # FILL IN RELEVANT INFORMATION FROM MODEL ARRAY
 		tmp = checkName(self.instrument,DEFINED_INSTRUMENTS)
@@ -1756,15 +1749,47 @@ class Modelset(object):
 			vals = list(set(list(self.parameters[k])))
 			if isNumber(self.parameters.loc[0,k])==True:
 				if len(vals)==1: print('\t{}: {}'.format(k,vals[0]))
-				else: print('\t{}: {} to {}'.format(k,numpy.nanmin(vals),numpy.nanmax(vals)))
+				else: print('\t{}: {} to {}'.format(k,np.nanmin(vals),np.nanmax(vals)))
 			else:
 				f = vals[0]
 				if len(vals) > 0:
 					for i in vals[1:]: f=f+', {}'.format(i)
 				print('\t{}: {}'.format(k,f))
+		print('\nWavelength range: {:.2f} to {:.2f} {}'.format(np.nanmin(self.wave.value),np.nanmax(self.wave.value),str(self.wave.unit)))
+		print('Fluxes in units of {}'.format(str(self.flux[0,:].unit)))
 		return
 
 
+	def toWavelengths(self,wave):
+		'''
+		resample all fluxes to an input wavelength grid
+		'''
+		pass
+
+	def fluxConvert(self,unit):
+		'''
+		transfrom all fluxes to a new unit, including flam <-> fnu
+		'''
+		pass
+
+	def model(self,parameters):
+		'''
+		retrieves an individual model from model grid based on parameters
+		calls _gridModel and _interpolatedModel
+		'''
+		pass
+
+	def _gridModel(self,parameters):
+		'''
+		retrieves one of the models in the model grid based on parameters
+		'''
+		pass
+
+	def _interpolatedModel(self,parameters):
+		'''
+		computes an interpolated model among the model grid
+		'''
+		pass
 
 #######################################################
 #######################################################
@@ -1785,16 +1810,16 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	Parameters
 	----------
 
-	f1 : numpy.array
+	f1 : np.array
 		An array of floats corresponding to the first spectrum; this quantity should not have units
 
-	f2 : numpy.array
+	f2 : np.array
 		An array of floats corresponding to the second spectrum; this quantity should not have units
 
-	unc : numpy.array
+	unc : np.array
 		An array of floats corresponding to the joint uncertainty; this quantity should not have units
 
-	weights = [] : numpy.array
+	weights = [] : np.array
 		An optional array of floats corresponding to the weighting of the flux values, with large values corresponding
 		to higher weights. Weights of zero do not contribute to the quality of fit. By default all weights are 1
 
@@ -1828,22 +1853,22 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 
 	'''
 # weighting - can be used to mask bad pixels or weight specific regions
-	if len(weights)!=len(f1): wt = numpy.ones(len(f1))
-	else: wt=numpy.array(weights)
+	if len(weights)!=len(f1): wt = np.ones(len(f1))
+	else: wt=np.array(weights)
 # mask out bad pixels in either spectrum or uncertainty
-	w = numpy.where(numpy.logical_and(numpy.isnan(f1+f2+unc)==False,wt*unc!=0))
+	w = np.where(np.logical_and(np.isnan(f1+f2+unc)==False,wt*unc!=0))
 	dof = len(f1[w])
 	if dof<=1: raise ValueError('Not enough flux or noise values are non-nan')
 # compute chi-square - CURRENTLY ONLY OPTION
-	scl = numpy.nansum(wt[w]*f1[w]*f2[w]/(unc[w]**2))/numpy.nansum(wt[w]*(f2[w]**2)/(unc[w]**2))
-	chi = numpy.nansum(wt[w]*((f1[w]-scl*f2[w])**2)/(unc[w]**2))
+	scl = np.nansum(wt[w]*f1[w]*f2[w]/(unc[w]**2))/np.nansum(wt[w]*(f2[w]**2)/(unc[w]**2))
+	chi = np.nansum(wt[w]*((f1[w]-scl*f2[w])**2)/(unc[w]**2))
 	return chi, scl, dof-1
 
 
 
 # RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
 # NOTE: need to rework this using Johnson method
-def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=numpy.nan,smooth=1,verbose=ERROR_CHECKING):
+def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
 	'''
 	
 	Purpose
@@ -1857,7 +1882,7 @@ def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flu
 	sp : splat.Spectrum class
 		splat Spectrum object to resample onto wave grid
 
-	wave : numpy.ndarray or list
+	wave : np.ndarray or list
 		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
 		otherwise assumed to be in the units of `wave_unit`
 
@@ -1869,7 +1894,7 @@ def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flu
 		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
 		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
 
-	default_noise = numpy.nan : int or float
+	default_noise = np.nan : int or float
 		default noise value if not provided in noise array
 
 	smooth = 1 : int
@@ -1906,101 +1931,101 @@ STOPPED HERE
 	'''
 # prepare input flux
 #	 if isUnit(flux): flx0=flux.to(flux_unit).value
-#	 else: flx0 = numpy.array(copy.deepcopy(flux))
+#	 else: flx0 = np.array(copy.deepcopy(flux))
 
 # # prepare input uncertainty
 #	 if isUnit(noise): unc0=noise.to(flux_unit).value
-#	 else: unc0 = numpy.array(copy.deepcopy(noise))
+#	 else: unc0 = np.array(copy.deepcopy(noise))
 #	 if len(noise)==0: 
 #		 if isUnit(default_noise): dns=default_noise.to(flux_unit).value
-#		 else: dns = numpy.array(copy.deepcopy(default_noise))
-#		 unc0 = numpy.array([dns]*len(flx0))
+#		 else: dns = np.array(copy.deepcopy(default_noise))
+#		 unc0 = np.array([dns]*len(flx0))
 
 # # prepare input wavelength grid
 #	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
-#	 else: wv0 = numpy.array(copy.deepcopy(wave0))
+#	 else: wv0 = np.array(copy.deepcopy(wave0))
 
 # prepare output wavelength grid
 	if isUnit(wave): wv=wave.to(sp.wave.unit).value
-	else: wv = numpy.array(copy.deepcopy(wave))
-	wshift = 2.*numpy.absolute(numpy.nanmedian(numpy.roll(wv,-1)-wv))
+	else: wv = np.array(copy.deepcopy(wave))
+	wshift = 2.*np.absolute(np.nanmedian(np.roll(wv,-1)-wv))
 
 
 # trim if necessary
-#	print(numpy.nanmin(sp.wave.value),numpy.nanmax(sp.wave.value),numpy.nanmin(wv),numpy.nanmax(wv))
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),np.nanmin(wv),np.nanmax(wv))
 	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
-#	print(numpy.nanmin(sp.wave.value),numpy.nanmax(sp.wave.value),len(sp.wave))
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),len(sp.wave))
 	# wv0 = wv0[wtr]
 	# flx0 = flx0[wtr]
 	# unc0 = unc0[wtr]
-	# wtr = numpy.where(numpy.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
+	# wtr = np.where(np.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
 	# if len(wv0[wtr])==0:
-	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(numpy.nanmin(wv0),numpy.nanmax(wv0),numpy.nanmin(wv),numpy.nanmax(wv)))
+	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(np.nanmin(wv0),np.nanmax(wv0),np.nanmin(wv),np.nanmax(wv)))
 
 # prepare spectrum object
 	# spc = copy.deepcopy(sp)
 	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
 
 # run interpolation
-	flx = [numpy.nan]*len(wv)
-	unc = [numpy.nan]*len(wv)
+	flx = [np.nan]*len(wv)
+	unc = [np.nan]*len(wv)
 	smind = int(smooth)
 	for i,w in enumerate(wv):
 		if i<smind: wrng = [w-(wv[smind]-w),wv[smind]]
 		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
 		else: wrng = [wv[i-smind],wv[i+smind]]
-		wsel = numpy.where(numpy.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
+		wsel = np.where(np.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
 		cnt = len(sp.wave.value[wsel])
 # expand range
 		if cnt <= 1:
-			wsel = numpy.where(numpy.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
+			wsel = np.where(np.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
 			cnt = len(sp.wave.value[wsel])
 		if cnt >= 1:
 			flx0s = sp.flux.value[wsel]
 			unc0s = sp.noise.value[wsel]
 			wv0s = sp.wave.value[wsel]
-			wn = numpy.where(~numpy.isnan(flx0s))
+			wn = np.where(~np.isnan(flx0s))
 			if len(flx0s[wn])>0:
 				if method.lower() in ['mean','mn','average','ave']:
-					flx[i] = numpy.nanmean(flx0s[wn])
-					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = numpy.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
+					flx[i] = np.nanmean(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = np.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
 				elif method.lower() in ['weighted mean','wmn','weighted']:
 					wts = 1./unc0s[wn]**2
-					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
-					flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
-					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
+					flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
 				elif method.lower() in ['integrate','int']:
-					wts = numpy.ones(len(wv0s[wn]))
+					wts = np.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
 					else:
-						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
 				elif method.lower() in ['weighted integrate','wint']:
 					wts = 1./unc0s[wn]**2
-					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
 					else:
-						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
-					# unc[i] = (numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
-					# flx[i] = numpy.trapz(flx0[wn],wv0[wn])/numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+					# unc[i] = (np.trapz(np.ones(len(wv0[wn])),wv0[wn])/np.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
+					# flx[i] = np.trapz(flx0[wn],wv0[wn])/np.trapz(np.ones(len(wv0[wn])),wv0[wn])
 # median by default
 				else:
-					flx[i] = numpy.nanmedian(flx0s[wn])
-					if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = flx[i]/numpy.nanmedian(flx0s[wn]/unc0s[wn])
+					flx[i] = np.nanmedian(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = flx[i]/np.nanmedian(flx0s[wn]/unc0s[wn])
 		# else:
 		#	 print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
-#					unc[i] = numpy.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
+#					unc[i] = np.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
 
 # return flux
 	# return flx*flux_unit
 
 # return Spectrum object
-	return Spectrum(wave=numpy.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
+	return Spectrum(wave=np.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
 
 
 
@@ -2074,6 +2099,7 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 
 # INFORMATION ON A MODEL
 # UPDATE THIS WITH NEW MODEL STRUCTURE
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2166,7 +2192,7 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 			vals.sort()
 			if isinstance(mpars.loc[0,k],float)==True:
 				if len(vals)==1: print('\t\t{}: {}'.format(k,vals[0]))
-				else: print('\t\t{}: {} to {}'.format(k,numpy.nanmin(vals),numpy.nanmax(vals)))
+				else: print('\t\t{}: {} to {}'.format(k,np.nanmin(vals),np.nanmax(vals)))
 			else:
 				f = vals[0]
 				if len(vals) > 0:
@@ -2267,12 +2293,11 @@ def generateWave(wave_range,wstep,method='resolution',verbose=ERROR_CHECKING):
 		while wave[-1] <= wv[1]: wave.append(((wave[-1]*wunit).to(u.Hz,equivalencies=u.spectral())-wstep).to(wunit,equivalencies=u.spectral()).value)
 
 # return
-	return numpy.array(wave)*wunit
-# default wavelength grid	
-DEFAULT_WAVE = generateWave(DEFAULT_WAVE_RANGE,DEFAULT_RESOULTION,method='resolution',verbose=ERROR_CHECKING)
+	return np.array(wave)*wunit
 
 
 # READ A PREDEFINED WAVELENGTH FILE
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=ERROR_CHECKING):
 	'''
 	Reads in an csv file for wave
@@ -2288,12 +2313,11 @@ def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=ERROR
 		raise ValueError('WARNING: wave file {} cannot be found, check your file name'.format(inp))
 	dp = pandas.read_csv(file)
 	if cname not in list(dp.columns): cname = list(dp.columns)[0]
-	return numpy.array(dp[cname])*DEFAULT_WAVE_UNIT
+	return np.array(dp[cname])*DEFAULT_WAVE_UNIT
 
-def getWave(**kwargs):
-	return readWave(**kwargs)
 
 # WRITE A WAVELENGTH FILE
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def writeWave(wave,file='wave.csv',overwrite=True,verbose=ERROR_CHECKING):
 	'''
 	Writes wavelength array to file
@@ -2311,6 +2335,7 @@ def writeWave(wave,file='wave.csv',overwrite=True,verbose=ERROR_CHECKING):
 
 
 # READ IN A MODEL SET
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def readModelSet(file,verbose=ERROR_CHECKING):
 	'''
 	Reads in an h5 model set
@@ -2321,6 +2346,7 @@ def readModelSet(file,verbose=ERROR_CHECKING):
 
 
 # "GETS" A MODEL SET, INCLUDING THE WAVELENGTH FILE
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODEL_FILE_PREFIX,wave_prefix=WAVE_FILE_PREFIX,info=False,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2426,7 +2452,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 
 # GENERATE A MODEL SET
 # note that this routine requires the splat.model package
-def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},initial_instrument='RAW',
+def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instrument='RAW',
 	method='integrate',doresample=True,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
@@ -2443,9 +2469,9 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 	modelset = '' : str
 		The name of the model set to generate, or optionally the full path to the folder containing the RAW model files
 
-	wave = DEFAULT_WAVE : str or list or numpy.ndarray
+	wave = DEFAULT_WAVE : str or list or np.ndarray
 		Either the name of the instrument that will serve as the baseline wavelength array, or the array 
-		of wavelengths to sample the spectra to, which can be of type list or numpy.ndarray and can be 
+		of wavelengths to sample the spectra to, which can be of type list or np.ndarray and can be 
 		unitted or assumed to be in microns
 
 	contraints = {} : dict
@@ -2614,7 +2640,9 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 		if isinstance(wave,str):
 			wave0 = readWave(wave,verbose=verbose)
 # check if unitted and convert if so
-		elif isinstance(wave,list) or isinstance(wave,numpy.ndarray):
+		elif isinstance(wave,list) or isinstance(wave,np.ndarray):
+			if len(wave)==0:
+				wave = generateWave(DEFAULT_WAVE_RANGE,DEFAULT_RESOLUTION,method='resolution',verbose=ERROR_CHECKING)
 			if isUnit(wave): wave0 = wave.to(DEFAULT_WAVE_UNIT).value
 			elif isUnit(wave[0]): wave0 = [w.to(DEFAULT_WAVE_UNIT).value for w in wave]
 			else: wave0 = copy.deepcopy(wave)
@@ -2628,26 +2656,26 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 
 # read in the models trying a few different methods
 	pars = []
-	step = numpy.ceil(len(modelpars)/10.)
+	step = np.ceil(len(modelpars)/10.)
 #	for i in tqdm(range(len(dp))):
 	for i in range(len(modelpars)):
-		if i!=0 and numpy.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
+		if i!=0 and np.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
 		par = dict(modelpars.loc[i,:])
 
 # read in with splat.Spectrum
 		mdl = splat.Spectrum(modelpars.loc[i,'file'])
 		wv,flx = mdl.wave.value,mdl.flux.value
 # read in with spmdl.loadModel
-		if numpy.isfinite(numpy.nanmedian(flx))==False:
+		if np.isfinite(np.nanmedian(flx))==False:
 			par = dict(modelpars.loc[i,:])
 			mdl = spmdl.loadModel(**par,force=True)
 			wv,flx = mdl.wave.value,mdl.flux.value
 # read in with splat.readSpectrum
-		if numpy.isfinite(numpy.nanmedian(flx))==False:
+		if np.isfinite(np.nanmedian(flx))==False:
 			mdl = splat.readSpectrum(modelpars.loc[i,'file'])
 			wv,flx = mdl['wave'].value,mdl['flux'].value
 # read in with pandas
-		if numpy.isfinite(numpy.nanmedian(flx))==False:
+		if np.isfinite(np.nanmedian(flx))==False:
 			if '.txt' in modelpars.loc[i,'file']: delim='\t'
 			elif '.csv' in modelpars.loc[i,'file']: delim=','
 			else: delim=r'\s+'
@@ -2655,7 +2683,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 			wv,flx = dp['wave'],dp['flux']
 # don't know what to do
 #		print(modelpars.loc[i,'file'],len(flx))
-		try: md = numpy.isfinite(numpy.nanmedian(flx))
+		try: md = np.isfinite(np.nanmedian(flx))
 		except: raise ValueError('Could not read in file {}'.format(modelpars.loc[i,'file']))
 
 # resample if desired
@@ -2689,6 +2717,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 
 
 # GET ONE OF THE GRID MODELS
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2707,7 +2736,7 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 		{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
 		have the same type as the parameter values in the models dataframe.
 
-	wave = [] : list or numpy.ndarray
+	wave = [] : list or np.ndarray
 		Array of wavelengths that corresponds to the flux values, and must have the same length as the
 		flux values. Can be unitted or is assumed to be in microns
 
@@ -2792,6 +2821,7 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 
 
 # GET AN INTERPOLATED GRID MODEL
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,defaults={},verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2812,7 +2842,7 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 		have the same type as the parameter values in the model's dataframe. Any parameters not
 		provided will be assumed to have the default values from DEFINED_SPECTRAL_MODELS
 
-	wave = [] : list or numpy.ndarray
+	wave = [] : list or np.ndarray
 		Array of wavelengths that corresponds to the flux values, and must have the same length as the
 		flux values. Can be unitted or is assumed to be in microns
 
@@ -2910,14 +2940,14 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 			smdls.reset_index(inplace=True,drop=True)
 		else:
 # continuous parameters			
-#				print(par[k],numpy.nanmin(vals),numpy.nanmax(vals)) 
+#				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
 			if par0[k] in vals:
 				smdls = smdls[smdls[k]==par0[k]]
 				smdls.reset_index(inplace=True,drop=True)
 			else:
-				valstep = numpy.absolute(numpy.array(vals)-numpy.roll(vals,1))
-				step = numpy.nanmedian(valstep[1:])				
-				limits[k] = [numpy.nanmax([numpy.nanmin(smdls[k]),par0[k]-step]),numpy.nanmin([numpy.nanmax(smdls[k]),par0[k]+step])]
+				valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+				step = np.nanmedian(valstep[1:])				
+				limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
 				if step>0:
 					smdls = smdls[smdls[k]>=limits[k][0]]
 					smdls = smdls[smdls[k]<=limits[k][1]]													 
@@ -2939,25 +2969,25 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 	fitvals,parvals = (),[]
 	for k in kys:
 		if k=='teff' or k=='co': 
-			fitvals+=tuple([[numpy.log10(x) for x in smdls[k]]])
-			parvals.append(numpy.log10(par0[k]))
+			fitvals+=tuple([[np.log10(x) for x in smdls[k]]])
+			parvals.append(np.log10(par0[k]))
 		else:
 			fitvals+=tuple([list(smdls[k])])
 			parvals.append(par0[k])
-	parvals = numpy.array([parvals])
-	fitvals = numpy.transpose(numpy.vstack(fitvals))
+	parvals = np.array([parvals])
+	fitvals = np.transpose(np.vstack(fitvals))
 
 # run interpolation
 	flx = []
 	for i in range(len(smdls.loc[0,flux_name])):
-		fs = [numpy.log10(x[i]) for x in smdls[flux_name]]
+		fs = [np.log10(x[i]) for x in smdls[flux_name]]
 		try: flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
 		except: 
 			if verbose==True: print('getInterpModel failed for values '.format)
 			raise ValueError('Insufficient model coverage; try reducing parameter constraints')
-	flx = numpy.array(flx)
+	flx = np.array(flx)
 	flx = 10.**flx
-	if numpy.isnan(numpy.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
+	if np.isnan(np.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
 #	print(truepar)
 
 # turn into Spectrum and scale if desired
@@ -2973,6 +3003,7 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 
 
 # WRAPPER TO GET A GRID OR INTERPOLATED MODEL
+# THIS WILL BE OBVIATED BY MODELSET CLASS
 def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
 	except: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
@@ -2980,9 +3011,13 @@ def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 	return sp
 
 
-########################################################################
-# FITTING METHODS
-########################################################################
+#####################################################
+#####################################################
+#####################################################
+################## FITTING METHODS ################## 
+#####################################################
+#####################################################
+#####################################################
 
 
 # FIT SPECTRUM TO A GRID OF MODELS
@@ -3100,9 +3135,9 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 				mdls.reset_index(inplace=True,drop=True)
 	
 # run through each grid point
-	for x in ['scale','chis','radius','dof']: mdls[x] = [numpy.nan]*len(mdls)
+	for x in ['scale','chis','radius','dof']: mdls[x] = [np.nan]*len(mdls)
 	for jjj in range(len(mdls)):
-		chi,scl,dof = compareSpec(spscl.flux.value,numpy.array(mdls.loc[jjj,flux_name]),spscl.noise.value,verbose=verbose)
+		chi,scl,dof = compareSpec(spscl.flux.value,np.array(mdls.loc[jjj,flux_name]),spscl.noise.value,verbose=verbose)
 		mdls.loc[jjj,'chis'] = chi
 		mdls.loc[jjj,'scale'] = scl
 		mdls.loc[jjj,'dof'] = dof
@@ -3111,7 +3146,7 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 #	mdls['model'] = [mset]*len(mdls)
 
 # best fit
-	mpar = dict(mdls.loc[numpy.argmin(mdls['chis']),:])
+	mpar = dict(mdls.loc[np.argmin(mdls['chis']),:])
 	mpar['rchi'] = mpar['chis']/mpar['dof']
 	dpars = list(mdls.keys())
 	for x in [flux_name]:
@@ -3123,11 +3158,11 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 			print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
 #	comp.scale(mpar['scale'])
-#	comp = splat.Spectrum(wave=wave,flux=numpy.array(mdls.loc[ibest,flux_name])*mdls.loc[ibest,'scale']*spscl.flux.unit)
+#	comp = splat.Spectrum(wave=wave,flux=np.array(mdls.loc[ibest,flux_name])*mdls.loc[ibest,'scale']*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
-#	dof = numpy.count_nonzero(~numpy.isnan(spscl.flux.value))-1
+#	dof = np.count_nonzero(~np.isnan(spscl.flux.value))-1
 	if verbose==True: print('\treduced chi2 = {}'.format(mpar['rchi']))
-	# sclstd = numpy.nanstd(diff.flux.value,ddof=1)/numpy.nanmax(spscl.flux.value)
+	# sclstd = np.nanstd(diff.flux.value,ddof=1)/np.nanmax(spscl.flux.value)
 	# mpar['sclstd'] = sclstd
 
 	if report == True:
@@ -3151,7 +3186,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,
 	quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,xscale='linear',yscale='linear',
 	file_prefix='mcmcfit_',verbose=ERROR_CHECKING):
-#	radius=numpy.nan,e_radius=numpy.nan,report=True):
+#	radius=np.nan,e_radius=np.nan,report=True):
 	'''
 	Purpose
 	-------
@@ -3319,7 +3354,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		else:
 			if k not in list(pstep.keys()):
 				if isinstance(mdls.loc[0,k],str): pstep[k] = -1.
-				else: pstep[k] = 0.5*numpy.nanmedian(numpy.absolute(numpy.array(vals)-numpy.roll(vals,1)))
+				else: pstep[k] = 0.5*np.nanmedian(np.absolute(np.array(vals)-np.roll(vals,1)))
 		if pstep[k] == 0: mkysfit.remove(k)
 		else:
 			if verbose==True: print('\t{}: initial={} step={}'.format(k,p0[k],pstep[k]))
@@ -3358,37 +3393,37 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		pnew = copy.deepcopy(pvals[-1])
 # continuous variables		
 		for k in list(pfitc.keys()): 
-			pnew[k] = numpy.random.normal(pvals[-1][k],pstep[k])
-			pnew[k] = numpy.nanmin([pnew[k],numpy.nanmax(mdls[k])])
-			pnew[k] = numpy.nanmax([pnew[k],numpy.nanmin(mdls[k])])
+			pnew[k] = np.random.normal(pvals[-1][k],pstep[k])
+			pnew[k] = np.nanmin([pnew[k],np.nanmax(mdls[k])])
+			pnew[k] = np.nanmax([pnew[k],np.nanmin(mdls[k])])
 # discrete variables
 		for k in list(pfitd.keys()): 
 			vals = list(set(list(mdls[k])))
-			pnew[k] = numpy.random.choice(vals)
+			pnew[k] = np.random.choice(vals)
 		pnew = pnew | pfitd
 		try:
 			cmdl = getModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
 			if verbose==True: print(i,pnew)
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
-			# if numpy.isnan(radius)==False and numpy.isnan(e_radius)==False:
+			# if np.isnan(radius)==False and np.isnan(e_radius)==False:
 			#	 chinew+=(((10.*u.pc*(scl**0.5)).to(u.Rsun).value-radius)/e_radius)**2
 			#if 'scale' not in list(pnew.keys()): cmdl.scale(scl)
 
 	# compute statistic
-			if method=='chidiff': st,chst = (chinew-chis[-1])/numpy.nanmin(chis),numpy.random.uniform(0,threshhold)
-			elif method=='survival': st,chst = 2*stats.f.sf(chinew/chis[-1],dof,dof),numpy.random.uniform(threshhold,1)
-			elif method=='dofscale': st,chst = dof/(0.5*dof+chinew-chis[-1]),numpy.random.uniform(threshhold,1)
+			if method=='chidiff': st,chst = (chinew-chis[-1])/np.nanmin(chis),np.random.uniform(0,threshhold)
+			elif method=='survival': st,chst = 2*stats.f.sf(chinew/chis[-1],dof,dof),np.random.uniform(threshhold,1)
+			elif method=='dofscale': st,chst = dof/(0.5*dof+chinew-chis[-1]),np.random.uniform(threshhold,1)
 			else: raise ValueError('Do not recognize statistical comparison {}; try chidiff, survival, or dofscale'.format(method))
 	#			if verbose==True: print(chinew,chis[-1],dof,st,chst)
 
 			if st<chst:
 	# reset if we've wandered off
-				if chinew>(1+2*threshhold)*numpy.nanmin(chis):
+				if chinew>(1+2*threshhold)*np.nanmin(chis):
 					if verbose==True: print('RESETING TO BEST FIT')
-					pvals.append(pvals[numpy.argmin(chis)])
-					chis.append(chis[numpy.argmin(chis)])
-					scales.append(scales[numpy.argmin(chis)])
-					mdlflxs.append(mdlflxs[numpy.argmin(chis)])
+					pvals.append(pvals[np.argmin(chis)])
+					chis.append(chis[np.argmin(chis)])
+					scales.append(scales[np.argmin(chis)])
+					mdlflxs.append(mdlflxs[np.argmin(chis)])
 	# criterion satisfied, make a move
 				else:
 					if verbose==True: print('CHANGED PARAMETERS!')
@@ -3410,7 +3445,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 			scales.append(scales[-1])
 			mdlflxs.append(mdlflxs[-1])
 # iterim save
-		if iterim>0 and i>0 and numpy.mod(i,iterim)==0 and report==True:
+		if iterim>0 and i>0 and np.mod(i,iterim)==0 and report==True:
 # save parameters
 			dpfit = pandas.DataFrame()
 			for k in mkys: 
@@ -3423,14 +3458,14 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 			dpfit.to_excel(outfile,index=False)
 # plot comparison
 			if verbose==True: print('Saving iterim plots')
-			pbest = dict(dpfit.loc[numpy.argmin(dpfit['chis']),:])
-#			pbest['radius'] = (10.*u.pc*(scales[numpy.argmin(chis)]**0.5)).to(u.Rsun).value
+			pbest = dict(dpfit.loc[np.argmin(dpfit['chis']),:])
+#			pbest['radius'] = (10.*u.pc*(scales[np.argmin(chis)]**0.5)).to(u.Rsun).value
 			cmdl = getModel(mdls,pbest,spscl.wave,scale=True,verbose=verbose)
-			# print(scales[numpy.argmin(chis)],pbest['scale'],numpy.nanmax(cmdl.flux.value))
-			# cmdl.scale(scales[numpy.argmin(chis)])
-			# print(numpy.nanmax(cmdl.flux.value))
+			# print(scales[np.argmin(chis)],pbest['scale'],np.nanmax(cmdl.flux.value))
+			# cmdl.scale(scales[np.argmin(chis)])
+			# print(np.nanmax(cmdl.flux.value))
 			label = '{} model '.format(mset)
-			label+=r'$\chi^2_r$='+'{:.1f}\n'.format(numpy.nanmin(chis)/dof)
+			label+=r'$\chi^2_r$='+'{:.1f}\n'.format(np.nanmin(chis)/dof)
 			label+='T={:.0f} '.format(pbest['teff'])
 			label+='logg={:.2f} '.format(pbest['logg'])
 			label+='z={:.2f} '.format(pbest['z'])
@@ -3441,9 +3476,9 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 			for k in plotpars:
 				if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
 			if absolute==True: plotpars.append('radius')
-			pltbest = [dpfit.loc[numpy.argmin(dpfit['chis']),x] for x in plotpars]
+			pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
-			weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
+			weights = np.array(dof/(dof+dpfit['chis']-np.nanmin(dpfit['chis'])))
 			outfile = file_prefix+'_corner.pdf'
 			plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
 # plot chains
@@ -3463,21 +3498,21 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 	dpfit['radius'] = [(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in dpfit['scale']]
 
 # best fit parameters
-	pbest = dict(dpfit.loc[numpy.argmin(dpfit['chis']),:])
-	pvalsb[numpy.argmin(chis[int(burn*nstep):])]
+	pbest = dict(dpfit.loc[np.argmin(dpfit['chis']),:])
+	pvalsb[np.argmin(chis[int(burn*nstep):])]
 	for x in [flux_name]:
 		if x in list(pbest.keys()): del pbest[x]
 	if verbose==True: print('Best parameters: {}'.format(pbest))
 	cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-	if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
+	if 'scale' not in list(pbest.keys()): cmdl.scale(scales[np.argmin(chis)])
 
 # distribution of values
 	pdist = {}
 	dpars = copy.deepcopy(mkysfit)
 	for k in dpars:
-		if isinstance(pvalsb[0][k],str)==False: pdist[k] = numpy.nanquantile([p[k] for p in pvalsb],quantscale)
+		if isinstance(pvalsb[0][k],str)==False: pdist[k] = np.nanquantile([p[k] for p in pvalsb],quantscale)
 	if absolute==True: 
-		pdist['radius'] = numpy.nanquantile([(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales[int(burn*nstep):]],quantscale)
+		pdist['radius'] = np.nanquantile([(10.*u.pc*(x**0.5)).to(u.Rsun).value for x in scales[int(burn*nstep):]],quantscale)
 
 	if report == True:
 # remove initial burn and save
@@ -3486,9 +3521,9 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		dpfit.to_excel(outfile,index=False)
 # plot comparison
 		# cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
-		# if 'scale' not in list(pbest.keys()): cmdl.scale(scales[numpy.argmin(chis)])
+		# if 'scale' not in list(pbest.keys()): cmdl.scale(scales[np.argmin(chis)])
 		label = '{} model '.format(mdls.loc[0,'model'])
-		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(chis[numpy.argmin(chis)]/dof)
+		label+=r'$\chi^2_r$='+'{:.1f}\n'.format(chis[np.argmin(chis)]/dof)
 		label+='T={:.0f} '.format(pbest['teff'])
 		label+='logg={:.2f} '.format(pbest['logg'])
 		label+='z={:.2f} '.format(pbest['z'])
@@ -3503,9 +3538,9 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		for k in plotpars:
 			if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
 		if absolute==True: plotpars.append('radius')
-		pltbest = [dpfit.loc[numpy.argmin(dpfit['chis']),x] for x in plotpars]
+		pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
-		weights = numpy.array(dof/(dof+dpfit['chis']-numpy.nanmin(dpfit['chis'])))
+		weights = np.array(dof/(dof+dpfit['chis']-np.nanmin(dpfit['chis'])))
 		outfile = file_prefix+'_corner.pdf'
 		if verbose==True: print('Plotting corner plot to {}'.format(outfile))
 		plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
@@ -3525,9 +3560,23 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		return {'best': pbest, 'model': cmdl, 'distributions': pdist, 'chain': pandas.DataFrame(pvalsb)}
 
 
-########################################################################
-# PLOTTING FUNCTIONS
-########################################################################
+# emcee FIT OF A SPECTRUM TO AN INTERPOLATED GRID OF MODELS
+# PLACEHOLDER
+def fitemcee(spc,models,p0={},constraints={},output='all',
+	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,
+	quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,xscale='linear',yscale='linear',
+	file_prefix='emceefit_',verbose=ERROR_CHECKING):
+
+	pass
+	return
+
+####################################################
+####################################################
+####################################################
+################ PLOTTING FUNCTIONS ################ 
+####################################################
+####################################################
+####################################################
 
 # PLOT COMPARISON OF TWO SPECTRA
 def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
@@ -3541,23 +3590,23 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
 	# if absolute==True: ylabel='Absolute '+ylabel
-	strue = sspec.wave.value[numpy.isnan(sspec.flux.value)==False]
-	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
+	strue = sspec.wave.value[np.isnan(sspec.flux.value)==False]
+	wrng = [np.nanmin(strue),np.nanmax(strue)]
 
 	plt.clf()
 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=4,alpha=0.5,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
-	ax1.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = numpy.nanmax(cspec.flux.value)
-	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
+	scl = np.nanmax(cspec.flux.value)
+	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
 	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
 	else: ax1.set_ylim(ylim)
 	if yscale=='log':
 #		ax1.set_ylim([x*scl for x in [1.e-2,2]])
-		if ylim==None: ax1.set_ylim([numpy.nanmean(sspec.noise.value)/2.,2*scl])
+		if ylim==None: ax1.set_ylim([np.nanmean(sspec.noise.value)/2.,2*scl])
 	if xlim==None: xlim=wrng
 	ax1.set_xlim(xlim)
 	ax1.set_xscale(xscale)
@@ -3567,9 +3616,9 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 	ax1.tick_params(axis="y", labelsize=14*fontscale)
 
 	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
-	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = numpy.nanquantile(diff,[0.02,0.98])
+	scl = np.nanquantile(diff,[0.02,0.98])
 	# ax2.set_ylim([2*sc for sc in scl])
 	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
 	ax2.set_xlim(xlim)
@@ -3592,41 +3641,41 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
 	# if absolute==True: ylabel='Absolute '+ylabel
-	strue = spec.wave.value[numpy.isnan(spec.flux.value)==False]
-	wrng = [numpy.nanmin(strue),numpy.nanmax(strue)]
+	strue = spec.wave.value[np.isnan(spec.flux.value)==False]
+	wrng = [np.nanmin(strue),np.nanmax(strue)]
 	if nsample<0: nsample = int(len(chain)/10)
 
 # first identify the best fit model
-	pbest = dict(chain.loc[numpy.argmin(chain['chis']),:])
+	pbest = dict(chain.loc[np.argmin(chain['chis']),:])
 	cspec = getModel(models,pbest,spec.wave)
 #	if 'scale' not in list(chain.columns): cspec.scale(scale)
 #	cspec.scale(pbest['scale'])
 # scale
 	sspec = copy.deepcopy(spec)
 	sspec.scale(scale)
-#	print(numpy.nanmedian(sspec.flux.value))
+#	print(np.nanmedian(sspec.flux.value))
 	cspec.scale(scale)
 	diff = sspec.flux.value-cspec.flux.value
 
 # now identify the random sample
-	chainsub = chain[chain['chis']/numpy.nanmin(chain['chis'])<relchi]
+	chainsub = chain[chain['chis']/np.nanmin(chain['chis'])<relchi]
 	chainsub.reset_index(inplace=True)
-	nsamp = numpy.nanmin([nsample,len(chainsub)])
-	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in numpy.random.randint(0,len(chainsub)-1,nsamp)]
+	nsamp = np.nanmin([nsample,len(chainsub)])
+	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in np.random.randint(0,len(chainsub)-1,nsamp)]
 
 # plot
 	plt.clf()
 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	if method=='minmax':
-		minflx = numpy.nanmin(fluxes,axis=0)*scale
-		maxflx = numpy.nanmax(fluxes,axis=0)*scale
+		minflx = np.nanmin(fluxes,axis=0)*scale
+		maxflx = np.nanmax(fluxes,axis=0)*scale
 		# if 'scale' not in list(chainsub.columns):
 		#	 minflx = minflx*scale 
 		#	 maxflx = maxflx*scale 
 		ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
 	elif method=='meanstd':
-		meanflx = numpy.nanmean(fluxes,axis=0)*scale
-		stdflx = numpy.nanstd(fluxes,axis=0)*scale
+		meanflx = np.nanmean(fluxes,axis=0)*scale
+		stdflx = np.nanstd(fluxes,axis=0)*scale
 		# if 'scale' not in list(chainsub.columns):
 		#	 meanflx = meanflx*scale 
 			# stdflx = stdflx*scale 
@@ -3636,10 +3685,10 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
-	ax1.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = numpy.nanmax(cspec.flux.value)
-	scl = numpy.nanmax([scl,numpy.nanmax(sspec.flux.value)])
+	scl = np.nanmax(cspec.flux.value)
+	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
 	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
 	else: ax1.set_ylim(ylim)
 	ax1.set_xscale(xscale)
@@ -3653,9 +3702,9 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	ax1.tick_params(axis="y", labelsize=14*fontscale)
 
 	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
-	ax2.plot([numpy.nanmin(sspec.wave.value),numpy.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = numpy.nanquantile(diff,[0.02,0.98])
+	scl = np.nanquantile(diff,[0.02,0.98])
 	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
 	ax2.set_xlim(xlim)
 	ax2.set_xscale(xscale)
@@ -3677,19 +3726,19 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',xlabel='Step',labeldict=PARAME
 		return
 # set up plot
 	plt.clf()
-	fig = plt.figure(figsize=[2*6,numpy.ceil(nplot/2)*3])
+	fig = plt.figure(figsize=[2*6,np.ceil(nplot/2)*3])
 	for i,l in enumerate(plotpars):	
-		ax = plt.subplot(int(numpy.ceil(nplot/2)),2,i+1)
+		ax = plt.subplot(int(np.ceil(nplot/2)),2,i+1)
 		ax.plot(dpfit[l],'k-')
 # indicate current best fit parameter		
 		if l in list(pbest.keys()): 
-			ax.plot(numpy.zeros(len(dpfit[l]))+pbest[l],'b--')
+			ax.plot(np.zeros(len(dpfit[l]))+pbest[l],'b--')
 # indicate best fit in chain		
 		if 'chis' in list(dpfit.keys()):
-#			print(l,dpfit.loc[numpy.argmin(dpfit['chis']),l])
-			ax.plot(numpy.zeros(len(dpfit[l]))+dpfit.loc[numpy.argmin(dpfit['chis']),l],'m--')
-			ax.plot([numpy.argmin(dpfit['chis']),numpy.argmin(dpfit['chis'])],[numpy.nanmin(dpfit[l]),numpy.nanmax(dpfit[l])],'m--')
-			ax.set_title(dpfit.loc[numpy.argmin(dpfit['chis']),l])
+#			print(l,dpfit.loc[np.argmin(dpfit['chis']),l])
+			ax.plot(np.zeros(len(dpfit[l]))+dpfit.loc[np.argmin(dpfit['chis']),l],'m--')
+			ax.plot([np.argmin(dpfit['chis']),np.argmin(dpfit['chis'])],[np.nanmin(dpfit[l]),np.nanmax(dpfit[l])],'m--')
+			ax.set_title(dpfit.loc[np.argmin(dpfit['chis']),l])
 # labels and ticks
 		ax.set_xlabel(xlabel,fontsize=14)
 		if l in list(labeldict.keys()): ax.set_ylabel(labeldict[l],fontsize=14)
@@ -3707,7 +3756,7 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 # choose plot columns
 	ppars = copy.deepcopy(plotpars)
 	for x in plotpars:
-		if numpy.nanmin(dpfit[x])==numpy.nanmax(dpfit[x]): ppars.remove(x)
+		if np.nanmin(dpfit[x])==np.nanmax(dpfit[x]): ppars.remove(x)
 	if len(ppars)==0:
 		if verbose==True: print('Warning: there are no parameters to plot!')
 		return
@@ -3718,7 +3767,7 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 	dpplot = dpfit[ppars2]
 		
 # weights
-	if len(weights)<len(dpplot): weights=numpy.ones(len(dpplot))
+	if len(weights)<len(dpplot): weights=np.ones(len(dpplot))
 	
 # labels
 	plabels=[]
@@ -3727,7 +3776,7 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 		else: plabels.append(k)
 
 # best fit parameters
-	truths = [numpy.nan for x in ppars2]
+	truths = [np.nan for x in ppars2]
 	if len(list(pbest.keys()))>0:
 		for i,k in enumerate(ppars2):
 			if k in list(pbest.keys()): truths[i]=pbest[k]
