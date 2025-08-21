@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools","setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -55,4 +55,6 @@ include-package-data = true
 [tool.setuptools.package-data]
 #"*" = ["*.h5","*.csv"] # includes the data files in models/
 "*" = ["*.csv"] # only download the .csv files in spectra/
+
+[tool.setuptools_scm]
 
