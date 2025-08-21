@@ -35,14 +35,12 @@ dependencies = [
     "tqdm",
     "importlib_resources; python_version < '3.7'",
 ]
+dynamic = ["version"]
+license-files = ["LICENSE"]
 
 [project.urls]
 Repository = "https://github.com/aburgasser/ucdmcmc.git"
 Issues = "https://github.com/aburgasser/ucdmcmc/issues"
-
-license-files = ["LICENSE"]
-
-dynamic = ["version"]
 
 [project.optional-dependencies]
 test = [
@@ -54,5 +52,6 @@ test = [
 include-package-data = true
 
 [tool.setuptools.package-data]
-"*" = ["*.h5","*.csv"] # includes the data files in models/
+#"*" = ["*.h5","*.csv"] # includes the data files in models/
+"*" = ["*.csv"] # only download the .csv files in spectra/
 
