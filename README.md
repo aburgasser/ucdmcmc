@@ -3,9 +3,13 @@
 
 ## INSTALLATION NOTES
 
-### Install UCDMCMC
+ucdmcmc can be installed from pip:
 
-ucdmcmc can be installed from git:
+	```
+	pip install ucdmcmc
+	```
+
+or from git:
 
 	```
 	git clone
@@ -13,11 +17,20 @@ ucdmcmc can be installed from git:
 	python -m setup.py install
 	```
 
+
+It is recommended that you install in a conda environment to ensure the dependencies do not conflict with your own installation
+
+	```
+	conda create -n ucdmcmc python=3.13
+	conda activate ucdmcmc
+	pip install ucdmcmc
+	```
+
 A check that this worked is that you can import ucdmcmc into python/jupyter noteobook, and that the ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
 
-### Install SPLAT
+### Optionally install SPLAT
 
-For the interim, you will also need to install SPLAT to work with the spectral data files - this is not automatically installed on setup. The instructions are essentially the same:
+To generate new model sets using the built-in ``generateModels()` function, you will need to install SPLAT (note: this is not necessary for the other functionality in this code). SPLAT is not automatically installed on setup. The instructions are essentially the same:
 
 	```
 	git clone https://github.com/aburgasser/splat.git
@@ -25,10 +38,22 @@ For the interim, you will also need to install SPLAT to work with the spectral d
 	python -m pip install .
 	```
 
+## Models
+
+ucdmcmc comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/
+
+## Spectra
+
+ucdmcmc comes with a starter set of spectra for the following instruments:
+* EUCLID: TBD
+* NIR: TRAPPIST1 spectrum from Davoudi et al. (2024) https://ui.adsabs.harvard.edu/abs/2024ApJ...970L...4D/abstract
+* SPEX-PRISM: 2MASS J0559-1404 from Burgasser et al. (2006) https://ui.adsabs.harvard.edu/abs/2006ApJ...637.1067B/abstract
+* JWST-NIRSPEC-PRISM: UNCOVER 33436 from Burgasser et al. (2024) https://ui.adsabs.harvard.edu/abs/2024ApJ...962..177B/abstract
+* JWST-NIRSPEC-G395H: TBD
+* JWST-MIRI-LRS: TBD 
+* JWST-NIRSPEC-MIRI: Combined NIRSpec/PRISM and MIRI/LRS of SDSS J1624+0029 from Beiler et al. (2024) https://ui.adsabs.harvard.edu/abs/2024arXiv240708518B/abstract
+
 ## Usage
 
-[tbd examples]
+[TBD examples]
 
-## Generating models
-
-[tbd demonstration]
