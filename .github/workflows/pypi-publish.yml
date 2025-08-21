@@ -24,12 +24,10 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
-  
     - name: Install dependencies
       run: >-
         python3 -m 
-        pip install 
-        build
+        pip install build setuptools_scm
         --user
     - name: Build a binary wheel
       run: python3 -m build
