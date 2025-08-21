@@ -2,7 +2,7 @@ astropy
 astroquery
 corner
 matplotlib
-numpy>=2.0
+numpy<2.0
 pandas
 tables
 scipy

@@ -56,6 +56,7 @@ import glob
 import matplotlib.pyplot as plt
 import numpy
 import os
+import sys
 import pandas
 import requests
 from scipy.interpolate import griddata
@@ -82,6 +83,8 @@ from statsmodels.stats.weightstats import DescrStatsW
 # a check is that ucdmcmc.MODEL_FOLDER points to the models folder that was downloaded
 # altnerately ucdmcmc.modelInfo() returns models
 
+
+
 #######################################################
 #######################################################
 #################   INITIALIZATION  ###################
@@ -90,12 +93,14 @@ from statsmodels.stats.weightstats import DescrStatsW
 
 
 # code parameters
-VERSION = '2025.08.19'
+VERSION = '2025.08.20'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))
 MODEL_FOLDER = os.path.join(CODE_PATH,'models/')
+MODEL_URL = "http://spexarchive.coolstarlab.ucsd.edu/ucdmcmc"
+ALT_MODEL_FOLDER = os.path.join(os.path.expanduser('~'),'.ucdmcmc_models','')
 SPECTRA_FOLDER = os.path.join(CODE_PATH,'spectra/')
 MODEL_FILE_PREFIX = 'models_'
 WAVE_FILE_PREFIX = 'wave_'
@@ -108,6 +113,7 @@ DEFAULT_FNU_UNIT = u.Jy
 DEFAULT_WAVE_NAME = 'wave'
 DEFAULT_FLUX_NAME = 'flux'
 DEFAULT_NOISE_NAME = 'noise'
+DEFAULT_PARAMETERS_NAME = 'noise'
 
 # baseline wavelength grid
 DEFAULT_WAVE_RANGE = [0.9,2.45]
@@ -147,7 +153,7 @@ DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0
 
 
 DEFINED_INSTRUMENTS = {
-#	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': [''], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
+	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': [''], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': [''], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
@@ -198,32 +204,378 @@ print('You are currently using version {}\n'.format(VERSION))
 print('Please report any errors are feature requests to our github page, {}\n\n'.format(GITHUB_URL))
 if ERROR_CHECKING==True: print('Currently running in error checking mode')
 
+# check/setup ALT_MODEL_FOLDER
+if os.path.exists(ALT_MODEL_FOLDER)==False:
+	try: 
+		os.mkdir(ALT_MODEL_FOLDER)
+	except: 
+		if ERROR_CHECKING==True: 
+			print('Warning! Could not create model folder {}\nSet ucdmcmc.ALT_MODEL_FOLDER to your preferred model directory'.format(ALT_MODEL_FOLDER))
+
+
+
+#######################################################
+#######################################################
+################  VARIOUS UTILITIES  ##################
+#######################################################
+#######################################################
+
+# DATA DOWNLOADER
+def downloadModel(file,url=MODEL_URL,targetdir=ALT_MODEL_FOLDER,verbose=ERROR_CHECKING):
+# already have it?
+	files = glob.glob(os.path.join(targetdir,file))
+	if len(files)>0:
+		if verbose==True: print('\n{} is already present in {}'.format(file,targetdir))
+		return
+# try to get it
+	try:
+		response = requests.get(os.path.join(url,file), stream=True)
+		response.raise_for_status()  # Raise an exception for bad status codes
+		with open(os.path.join(targetdir,file), 'wb') as f:
+			for chunk in response.iter_content(chunk_size=8192): f.write(chunk)
+		if verbose==True: print('\n{} downloaded from {}'.format(file,url))
+	except requests.exceptions.RequestException as e:
+		if verbose==True: print('\nError downloading {} from {}\n{}'.format(file,url,e))
+
+	return
+
+
+# GENERAL PURPOSE PROGRAM TO LOOK SOMETHING UP FROM A DICTIONARY
+def checkName(ref,refdict,altref='altname',output=False,verbose=ERROR_CHECKING):
+	'''
+
+	Purpose
+	-------
+
+	General usage program to check if a key is present in a dictionary, with the option to look through alternate names
+
+	Parameters
+	----------
+
+	ref : str
+		A string that corresponds to the relevant key
+
+	refdict: dict
+		Dictionary for which to search for a key
+
+	altref = 'altname' : str
+		If present, and refdict is a dictionary of dictionaries, will check the altname keys of the embedded dictionaries
+		to identify alternate names
+
+	output = False : bool
+		Default returned value if key is missing
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns the correct key from the dictionary, or if missing the value specified by output
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('me',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	Could not find item me in input dictionary; try: ['atmo20', 'btdusty16', 'btsettl08', 'burrows06', 
+	'dback24', 'elfowl24', 'lowz', 'saumon12', 'sonora21', 'sand24']
+	False
+
+	Dependencies
+	------------
+		
+	copy
+
+	'''
+
+# check reference	
+	refc = copy.deepcopy(ref)
+	if not isinstance(refc,str): return output
+	for k in list(refdict.keys()):
+		if refc==k: output = k
+		if altref in list(refdict[k].keys()):
+			if refc in [x for x in list(refdict[k][altref])]: output = k
+
+# return correct key or indicate an error
+	if output == False:
+		if verbose==True: print('\nCould not find item {} in input dictionary; try: {}'.format(ref,list(refdict.keys())))
+	return output
+
+
+# CHECKS IF SOMETHING IS A UNIT
+def isUnit(s):
+	'''
+
+	Purpose
+	-------
+
+	Checks if something is an astropy unit quantity; written in response to the many ways that astropy codes unit quantities
+
+	Parameters
+	----------
+
+	s : various
+		Quantity to check if unitted
+
+	Outputs
+	-------
+	
+	Returns True if unitted, False if not
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> import astropy.units as u
+	>>> ucdmcmc.isUnit(5)
+
+	False
+	
+	>>> ucdmcmc.isUnit(5*u.m)
+
+	True
+
+	>>> ucdmcmc.isUnit((5*u.m).value)
+
+	False
+
+	Dependencies
+	------------
+		
+	astropy.unit
+
+	'''
+
+	return isinstance(s,u.quantity.Quantity) or \
+		isinstance(s,u.core.Unit) or \
+		isinstance(s,u.core.CompositeUnit) or \
+		isinstance(s,u.core.IrreducibleUnit) or \
+		isinstance(s,u.core.NamedUnit) or \
+		isinstance(s,u.core.PrefixUnit)
+
+
+# CHECKS IF SOMETHING IS A NUMBER
+def isNumber(s):
+	'''
+	:Purpose: Checks if something is a number.
+
+	:param s: object to be checked
+	:type s: required
+
+	:Output: True or False
+
+	:Example:
+	>>> import splat
+	>>> print splat.isNumber(3)
+		True
+	>>> print splat.isNumber('hello')
+		False
+	'''
+	s1 = copy.deepcopy(s)
+	if isinstance(s1,bool): return False
+	if isinstance(s1,u.quantity.Quantity): s1 = s1.value
+	if isinstance(s1,float): return (True and not numpy.isnan(s1))
+	if isinstance(s1,int): return (True and not numpy.isnan(s1))
+	try:
+		s1 = float(s1)
+		return (True and not numpy.isnan(s1))
+	except:
+		return False
+
+
+# ROTATIONAL BROADENING KERNEL
+def lsfRotation(vsini,vsamp,epsilon=0.6,verbose=ERROR_CHECKING):
+	'''
+	Purpose: 
+
+		Generates a line spread function for rotational broadening, based on Gray (1992) 
+		Ported over by Chris Theissen and Adam Burgasser from the IDL routine 
+		`lsf_rotate <https://idlastro.gsfc.nasa.gov/ftp/pro/astro/lsf_rotate.pro>`_ writting by W. Landsman
+
+	Required Inputs:  
+
+		:param: **vsini**: vsini of rotation, assumed in units of km/s
+		:param: **vsamp**: sampling velocity, assumed in unit of km/s. vsamp must be smaller than vsini or else a delta function is returned
+
+	Optional Inputs:
+
+		:param: **epsilon**: limb darkening parameter based on Gray (1992)
+
+	Output:
+
+		Line spread function kernel with length 2*vsini/vsamp (forced to be odd)
+
+	:Example:
+		>>> import splat
+		>>> kern = lsfRotation(30.,3.)
+		>>> print(kern)
+			array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
+			0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
+			0.44558751,  0.29053574,  0.		])
+	'''
+# limb darkening parameters
+	e1 = 2. * (1. - epsilon)
+	e2 = numpy.pi * epsilon/2.
+	e3 = numpy.pi * (1. - epsilon/3.)
+
+# vsini must be > vsamp - if not, return a delta function
+	if vsini <= vsamp:
+		if verbose==True: print('\nWarning: velocity sampling {} is broader than vsini {}; returning delta function')  
+		lsf = numpy.zeros(5)  
+		lsf[2] = 1.
+		return lsf
+
+# generate LSF
+	nsamp = numpy.ceil(2.*vsini/vsamp)
+	if nsamp % 2 == 0:
+		nsamp+=1
+	x = numpy.arange(nsamp)-(nsamp-1.)/2.
+	x = x*vsamp/vsini
+	x2 = numpy.absolute(1.-x**2)
+
+	return (e1*numpy.sqrt(x2) + e2*x2)/e3
+
+
+# SPECTRUM READING ROUTINE
+def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,dimensionless=False,
+	comment='#',file_type='',delimiter='',hdunum=0,waveheader=False,crval1='CRVAL1',cdelt1='CDELT1',
+	wavelog=False,catch_sn=True,remove_nans=True,no_zero_noise=True,use_instrument_reader=True,
+	instrument='',verbose=ERROR_CHECKING,wave=[],flux=[],noise=[],**kwargs):
+	'''
+	Purpose
+	-------
+
+	Reads in spectral data from a variety of formats
+
+	'''
+
+# prepare output
+	output = {'wave':wave,'flux':flux,'noise':noise,'header':{}}
+
+# check inputs and keyword parameters
+	if file == '': raise NameError('\nNo filename passed to readSpectrum')
+	if not(isUnit(wave_unit)):
+		if verbose==True: print('Warning: wave_unit {} is not an astropy unit; using default {}'.format(wave_unit,DEFAULT_WAVE_UNIT))
+		wave_unit = DEFAULT_WAVE_UNIT
+	if not(isUnit(flux_unit)):
+		if verbose==True: print('Warning: flux_unit {} is not an astropy unit; using default {}'.format(flux_unit,DEFAULT_FLUX_UNIT))
+		flux_unit = DEFAULT_FLUX_UNIT
+	if dimensionless==True: flux_unit = u.dimensionless_unscaled
+
+# if a url, make sure it exists
+	if file[:4]=='http':
+		if requests.get(file).status_code!=requests.codes.ok:
+			raise ValueError('Cannot find remote file {}; check URL or your online status'.format(file))
+
+# if a local file, make sure it exists
+	else:
+		if os.path.exists(os.path.normpath(file)) == False: 
+			raise ValueError('Cannot find file {}\n\n'.format(file))
+
+# determine which type of file
+	if file_type=='': file_type = file.split('.')[-1]
+
+# zipped file - extract root
+	for k in ['gz','bz2','zip']:
+		if k in file_type:
+			file_type = (file.replace('.'+k,'')).split('.')[-1]
+
+# fits - can be done with fits.open as local or online and w/ or w/o gzip/bzip2/pkzip
+	if 'fit' in file_type:
+		with fits.open(os.path.normpath(file),ignore_missing_end=True,ignore_missing_simple=True,do_not_scale_image_data=True) as hdu:
+			hdu.verify('silentfix+ignore')
+			header = hdu[hdunum].header
+			if 'NAXIS3' in list(header.keys()): d = numpy.copy(hdu[hdunum].data[0,:,:])
+			else: d =  numpy.copy(hdu[hdunum].data)
+# make sure file is oriented correctly
+		if numpy.shape(d)[0]>numpy.shape(d)[1]: d = numpy.transpose(d)
+
+# wavelength is in header 
+		if waveheader==True and 'fit' in file_type and len(d[:,0])<3:
+			flux = d[0,:]
+			if crval1 in list(header.keys()) and cdelt1 in list(header.keys()):
+				wave = numpy.polyval([float(header[cdelt1]),float(header[crval1])],numpy.arange(len(flux)))
+			else: 
+				raise ValueError('\nCannot find {} and {} keywords in header of fits file {}'.format(crval1,cdelt1,file))
+# wavelength is explicitly in data array 
+		else:
+			wave = d[0,:]
+			flux = d[1,:]
+		if len(d[:,0]) > 2: noise = d[2,:]
+		else: noise = [numpy.nan]*len(wave)
+
+# ascii - can be done with pandas as local or online and w/ or w/o gzip/bzip2/pkzip
+	else:
+		if 'csv' in file_type and delimiter=='': delimiter = ','
+		elif ('tsv' in file_type or 'txt' in file_type) and delimiter=='': delimiter = '\t'
+		elif 'pipe' in file_type and delimiter=='': delimiter = '|'
+		elif 'tex' in file_type and delimiter=='': delimiter = '&'
+		else: delimiter = r'\s+'
+
+# initial read
+		dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,header=0)
+# if numbers in first row, replace with header
+		if isNumber(dp.columns[0])==True:
+			cnames = ['wave','flux']
+			if len(dp.columns)>2: cnames.append('noise')
+			if len(dp.columns)>3: 
+				for i in range(len(dp.columns))-3: cnames.append('c{}'.format(i))
+			dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,names=cnames)
+# assume order wave, flux, noise
+		wave = numpy.array(dp[dp.columns[0]])
+		flux = numpy.array(dp[dp.columns[1]])
+		if len(dp.columns)>2: noise = numpy.array(dp[dp.columns[2]])
+		else: noise = [numpy.nan]*len(dp)
+# placeholder header
+		header = fits.Header()	  # blank header
+
+#  wavelength scale is logarithmic
+	if 'wavelog'==True: wave = 10.**wave
+
+# final output dictionary
+	output['wave'] = numpy.array(wave)
+	output['flux'] = numpy.array(flux) 
+	output['noise'] = numpy.array(noise)
+	output['header'] = header
+
+# make sure arrays have units
+	if not isUnit(output['wave']): output['wave'] = output['wave']*wave_unit
+	output['wave'].to(wave_unit)
+	if not isUnit(output['flux']): output['flux'] = output['flux']*flux_unit
+	output['flux'].to(flux_unit)
+	if not isUnit(output['noise']): output['noise'] = output['noise']*flux_unit
+	output['noise'].to(flux_unit)
+
+# remove all parts of spectrum that are nans
+	if remove_nans==True:
+		w = numpy.where(numpy.logical_and(numpy.isnan(output['wave']) == False,numpy.isnan(output['flux']) == False))
+		output['wave'] = output['wave'][w]
+		output['flux'] = output['flux'][w]
+		output['noise'] = output['noise'][w]
+
+# force places where noise is zero to be NaNs
+	if no_zero_noise==True:
+		output['noise'][numpy.where(output['noise'] == 0.)] = numpy.nan
+
+	return output
+
+
 
 #######################################################
 #######################################################
 ###########  SPLAT-LIKE SPECTRUM CLASS  ###############
 #######################################################
 #######################################################
-
-# resample()
-# splat.Spectrum(wave=numpy.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
-# requires wave, flux, noise, name
-# functions: trim, scale
-
-# getSample()
-#	 sp = splat.Spectrum(file=sfile,name=DEFINED_INSTRUMENTS[inst]['sample_name'],instrument=inst)
-#	 sp.published = 'Y'
-#	 sp.data_reference = DEFINED_INSTRUMENTS[inst]['sample_bibcode']
-
-# getGridModel() and getInterpModel()
-#	 mdl = splat.Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name=name)
-	
-# splat.model is only used for generateModelSet()
-# spmdl.ModelNameToParameters(files[i])
-# spmdl.checkSpectralModelName(modelset)
-# spmdl.loadModelParameters()
-# spmdl.generateModelName(p))
-
 
 class Spectrum(object):
 	'''
@@ -1254,339 +1606,163 @@ class Spectrum(object):
 
 #######################################################
 #######################################################
-################  VARIOUS UTILITIES  ##################
+#################  MODELSET CLASS  ####################
 #######################################################
 #######################################################
 
-
-# GENERAL PURPOSE PROGRAM TO LOOK SOMETHING UP FROM A DICTIONARY
-def checkName(ref,refdict,altref='altname',output=False,verbose=ERROR_CHECKING):
+class Modelset(object):
+	'''
+	:Description: 
+		Class for containing spectral models including wavelength array
+		Main elements are wavelength array, flux grid, and parameter grid
+		Convenience functions for manipulating spectral fluxes
 	'''
 
-	Purpose
-	-------
-
-	General usage program to check if a key is present in a dictionary, with the option to look through alternate names
-
-	Parameters
-	----------
-
-	ref : str
-		A string that corresponds to the relevant key
-
-	refdict: dict
-		Dictionary for which to search for a key
-
-	altref = 'altname' : str
-		If present, and refdict is a dictionary of dictionaries, will check the altname keys of the embedded dictionaries
-		to identify alternate names
-
-	output = False : bool
-		Default returned value if key is missing
-
-	verbose = ERROR_CHECKING : bool
-		Set to True to return verbose output
-
-	Outputs
-	-------
-	
-	Returns the correct key from the dictionary, or if missing the value specified by output
-
-	Example
-	-------
-
-	>>> import ucdmcmc
-	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	'lowz'
-
-	>>> ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	'lowz'
-
-	>>> ucdmcmc.checkName('me',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	Could not find item me in input dictionary; try: ['atmo20', 'btdusty16', 'btsettl08', 'burrows06', 
-	'dback24', 'elfowl24', 'lowz', 'saumon12', 'sonora21', 'sand24']
-	False
-
-	Dependencies
-	------------
-		
-	copy
-
-	'''
-
-# check reference	
-	refc = copy.deepcopy(ref)
-	if not isinstance(refc,str): return output
-	for k in list(refdict.keys()):
-		if refc==k: output = k
-		if altref in list(refdict[k].keys()):
-			if refc in [x for x in list(refdict[k][altref])]: output = k
-
-# return correct key or indicate an error
-	if output == False:
-		if verbose==True: print('\nCould not find item {} in input dictionary; try: {}'.format(ref,list(refdict.keys())))
-	return output
-
-
-# CHECKS IF SOMETHING IS A UNIT
-def isUnit(s):
-	'''
-
-	Purpose
-	-------
-
-	Checks if something is an astropy unit quantity; written in response to the many ways that astropy codes unit quantities
-
-	Parameters
-	----------
-
-	s : various
-		Quantity to check if unitted
-
-	Outputs
-	-------
-	
-	Returns True if unitted, False if not
-
-	Example
-	-------
-
-	>>> import ucdmcmc
-	>>> import astropy.units as u
-	>>> ucdmcmc.isUnit(5)
-
-	False
-	
-	>>> ucdmcmc.isUnit(5*u.m)
-
-	True
-
-	>>> ucdmcmc.isUnit((5*u.m).value)
-
-	False
-
-	Dependencies
-	------------
-		
-	astropy.unit
-
-	'''
-
-	return isinstance(s,u.quantity.Quantity) or \
-		isinstance(s,u.core.Unit) or \
-		isinstance(s,u.core.CompositeUnit) or \
-		isinstance(s,u.core.IrreducibleUnit) or \
-		isinstance(s,u.core.NamedUnit) or \
-		isinstance(s,u.core.PrefixUnit)
-
-
-# CHECKS IF SOMETHING IS A NUMBER
-def isNumber(s):
-    '''
-    :Purpose: Checks if something is a number.
-
-    :param s: object to be checked
-    :type s: required
-
-    :Output: True or False
-
-    :Example:
-    >>> import splat
-    >>> print splat.isNumber(3)
-        True
-    >>> print splat.isNumber('hello')
-        False
-    '''
-    s1 = copy.deepcopy(s)
-    if isinstance(s1,bool): return False
-    if isinstance(s1,u.quantity.Quantity): s1 = s1.value
-    if isinstance(s1,float): return (True and not numpy.isnan(s1))
-    if isinstance(s1,int): return (True and not numpy.isnan(s1))
-    try:
-        s1 = float(s1)
-        return (True and not numpy.isnan(s1))
-    except:
-        return False
-
-
-# ROTATIONAL BROADENING KERNEL
-def lsfRotation(vsini,vsamp,epsilon=0.6,verbose=ERROR_CHECKING):
-	'''
-	Purpose: 
-
-		Generates a line spread function for rotational broadening, based on Gray (1992) 
-		Ported over by Chris Theissen and Adam Burgasser from the IDL routine 
-		`lsf_rotate <https://idlastro.gsfc.nasa.gov/ftp/pro/astro/lsf_rotate.pro>`_ writting by W. Landsman
-
-	Required Inputs:  
-
-		:param: **vsini**: vsini of rotation, assumed in units of km/s
-		:param: **vsamp**: sampling velocity, assumed in unit of km/s. vsamp must be smaller than vsini or else a delta function is returned
-
-	Optional Inputs:
-
-		:param: **epsilon**: limb darkening parameter based on Gray (1992)
-
-	Output:
-
-		Line spread function kernel with length 2*vsini/vsamp (forced to be odd)
-
-	:Example:
-		>>> import splat
-		>>> kern = lsfRotation(30.,3.)
-		>>> print(kern)
-			array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
-			0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
-			0.44558751,  0.29053574,  0.		])
-	'''
-# limb darkening parameters
-	e1 = 2. * (1. - epsilon)
-	e2 = numpy.pi * epsilon/2.
-	e3 = numpy.pi * (1. - epsilon/3.)
-
-# vsini must be > vsamp - if not, return a delta function
-	if vsini <= vsamp:
-		if verbose==True: print('\nWarning: velocity sampling {} is broader than vsini {}; returning delta function')  
-		lsf = numpy.zeros(5)  
-		lsf[2] = 1.
-		return lsf
-
-# generate LSF
-	nsamp = numpy.ceil(2.*vsini/vsamp)
-	if nsamp % 2 == 0:
-		nsamp+=1
-	x = numpy.arange(nsamp)-(nsamp-1.)/2.
-	x = x*vsamp/vsini
-	x2 = numpy.absolute(1.-x**2)
-
-	return (e1*numpy.sqrt(x2) + e2*x2)/e3
-
-
-# SPECTRUM READING ROUTINE
-def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,dimensionless=False,
-	comment='#',file_type='',delimiter='',hdunum=0,waveheader=False,crval1='CRVAL1',cdelt1='CDELT1',
-	wavelog=False,catch_sn=True,remove_nans=True,no_zero_noise=True,use_instrument_reader=True,
-	instrument='',verbose=ERROR_CHECKING,wave=[],flux=[],noise=[],**kwargs):
-	'''
-	Purpose
-	-------
-
-	Reads in spectral data from a variety of formats
-
-	'''
-
-# prepare output
-	output = {'wave':wave,'flux':flux,'noise':noise,'header':{}}
-
-# check inputs and keyword parameters
-	if file == '': raise NameError('\nNo filename passed to readSpectrum')
-	if not(isUnit(wave_unit)):
-		if verbose==True: print('Warning: wave_unit {} is not an astropy unit; using default {}'.format(wave_unit,DEFAULT_WAVE_UNIT))
-		wave_unit = DEFAULT_WAVE_UNIT
-	if not(isUnit(flux_unit)):
-		if verbose==True: print('Warning: flux_unit {} is not an astropy unit; using default {}'.format(flux_unit,DEFAULT_FLUX_UNIT))
-		flux_unit = DEFAULT_FLUX_UNIT
-	if dimensionless==True: flux_unit = u.dimensionless_unscaled
-
-# if a url, make sure it exists
-	if file[:4]=='http':
-		if requests.get(file).status_code!=requests.codes.ok:
-			raise ValueError('Cannot find remote file {}; check URL or your online status'.format(file))
-
-# if a local file, make sure it exists
-	else:
-		if os.path.exists(os.path.normpath(file)) == False: 
-			raise ValueError('Cannot find file {}\n\n'.format(file))
-
-# determine which type of file
-	if file_type=='': file_type = file.split('.')[-1]
-
-# zipped file - extract root
-	for k in ['gz','bz2','zip']:
-		if k in file_type:
-			file_type = (file.replace('.'+k,'')).split('.')[-1]
-
-# fits - can be done with fits.open as local or online and w/ or w/o gzip/bzip2/pkzip
-	if 'fit' in file_type:
-		with fits.open(os.path.normpath(file),ignore_missing_end=True,ignore_missing_simple=True,do_not_scale_image_data=True) as hdu:
-			hdu.verify('silentfix+ignore')
-			header = hdu[hdunum].header
-			if 'NAXIS3' in list(header.keys()): d = numpy.copy(hdu[hdunum].data[0,:,:])
-			else: d =  numpy.copy(hdu[hdunum].data)
-# make sure file is oriented correctly
-		if numpy.shape(d)[0]>numpy.shape(d)[1]: d = numpy.transpose(d)
-
-# wavelength is in header 
-		if waveheader==True and 'fit' in file_type and len(d[:,0])<3:
-			flux = d[0,:]
-			if crval1 in list(header.keys()) and cdelt1 in list(header.keys()):
-				wave = numpy.polyval([float(header[cdelt1]),float(header[crval1])],numpy.arange(len(flux)))
-			else: 
-				raise ValueError('\nCannot find {} and {} keywords in header of fits file {}'.format(crval1,cdelt1,file))
-# wavelength is explicitly in data array 
-		else:
-			wave = d[0,:]
-			flux = d[1,:]
-		if len(d[:,0]) > 2: noise = d[2,:]
-		else: noise = [numpy.nan]*len(wave)
-
-# ascii - can be done with pandas as local or online and w/ or w/o gzip/bzip2/pkzip
-	else:
-		if 'csv' in file_type and delimiter=='': delimiter = ','
-		elif ('tsv' in file_type or 'txt' in file_type) and delimiter=='': delimiter = '\t'
-		elif 'pipe' in file_type and delimiter=='': delimiter = '|'
-		elif 'tex' in file_type and delimiter=='': delimiter = '&'
-		else: delimiter = '\s+'
-
-# initial read
-		dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,header=0)
-# if numbers in first row, replace with header
-		if isNumber(dp.columns[0])==True:
-			cnames = ['wave','flux']
-			if len(dp.columns)>2: cnames.append('noise')
-			if len(dp.columns)>3: 
-				for i in range(len(dp.columns))-3: cnames.append('c{}'.format(i))
-			dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,names=cnames)
-# assume order wave, flux, noise
-		wave = numpy.array(dp[dp.columns[0]])
-		flux = numpy.array(dp[dp.columns[1]])
-		if len(dp.columns)>2: noise = numpy.array(dp[dp.columns[2]])
-		else: noise = [numpy.nan]*len(dp)
-# placeholder header
-		header = fits.Header()	  # blank header
-
-#  wavelength scale is logarithmic
-	if 'wavelog'==True: wave = 10.**wave
-
-# final output dictionary
-	output['wave'] = numpy.array(wave)
-	output['flux'] = numpy.array(flux) 
-	output['noise'] = numpy.array(noise)
-	output['header'] = header
-
-# make sure arrays have units
-	if not isUnit(output['wave']): output['wave'] = output['wave']*wave_unit
-	output['wave'].to(wave_unit)
-	if not isUnit(output['flux']): output['flux'] = output['flux']*flux_unit
-	output['flux'].to(flux_unit)
-	if not isUnit(output['noise']): output['noise'] = output['noise']*flux_unit
-	output['noise'].to(flux_unit)
-
-# remove all parts of spectrum that are nans
-	if remove_nans==True:
-		w = numpy.where(numpy.logical_and(numpy.isnan(output['wave']) == False,numpy.isnan(output['flux']) == False))
-		output['wave'] = output['wave'][w]
-		output['flux'] = output['flux'][w]
-		output['noise'] = output['noise'][w]
-
-# force places where noise is zero to be NaNs
-	if no_zero_noise==True:
-		output['noise'][numpy.where(output['noise'] == 0.)] = numpy.nan
-
-	return output
+	def __init__(self, *args, **kwargs):
+		'''
+		Initializes a model set
+		'''
+		self.wave = kwargs.get('wave',numpy.array([]))
+		self.flux = kwargs.get('flux',numpy.array([]))
+		self.parameters = kwargs.get('parameters',pandas.DataFrame())
+		self.modelname = ''
+		for x in ['name','model','modelname']: self.modelname = kwargs.get(x,self.modelname)
+		self.instrument = ''
+		for x in ['instrument','inst','instr']: self.instrument = kwargs.get(x,self.instrument)
+		self.filename = ''
+		for x in ['file','filename','input','fluxfile']: self.filename = kwargs.get(x,self.filename)
+		self.wavefile = kwargs.get('wavefile','')
+		self.model_parameters = kwargs.get('model_parameters',{})
+		self.instrument_parameters = kwargs.get('instrument_parameters',{})
+
+		prefix = kwargs.get('prefix',MODEL_FILE_PREFIX)
+		waveprefix = kwargs.get('waveprefix',WAVE_FILE_PREFIX)
+		url = kwargs.get('url',MODEL_URL)
+		wavecol = kwargs.get('wavecol',DEFAULT_WAVE_NAME)
+		fluxcol = kwargs.get('fluxcol',DEFAULT_FLUX_NAME)
+
+# READ IN FLUXES AND PARAMETERS
+# one string argument - assume it is the filename
+		if len(args)>0 and self.filename=='':
+			if isinstance(args[0],str)==True:
+				self.filename=args[0]
+
+# no arguments - assume file name is constructed from model and instrument
+		if self.modelname != '' and self.instrument != '' and self.filename=='':
+			self.filename='{}{}_{}.h5'.format(prefix,self.modelname,self.instrument)
+
+# we have a filename! read it in if present after searching relevant folders
+		if self.filename!='':
+			tmp = self.filename
+			if os.path.exists(tmp)==False: tmp = os.path.join(MODEL_FOLDER,tmp)
+			if os.path.exists(tmp)==False: tmp = tmp.replace(MODEL_FOLDER,ALT_MODEL_FOLDER)
+			if os.path.exists(tmp)==False: 
+# if still not present try to download from url
+				downloadModel(self.filename,os.path.join(url,'models',''),ALT_MODEL_FOLDER,verbose=ERROR_CHECKING)
+			if os.path.exists(tmp)==False: 
+				raise ValueError('Could not locate model file {}'.format(self.filename))
+			self.filename=tmp
+# read in based on file type
+			ftype = (self.filename.split('.'))[-1]
+# default method: .h5 file with parameters and fluxes
+			if ftype in ['h5']:
+				dpm = pandas.read_hdf(self.filename)
+				if fluxcol not in list(dpm.columns): raise ValueError('Flux column name {} not present in data array; specifiy the correct column name with keyword `fluxcol=`'.format(fluxcol))
+				self.flux = numpy.array([numpy.array(x) for x in dpm[fluxcol]])
+				for x in [fluxcol,'instrument','bibcode','model','modelname']:
+					if x in list(dpm.columns): del dpm[x]
+				self.parameters = dpm
+			else: raise ValueError('Modelset initiation only set up for .h5 files; stay tuned')
+
+# fluxes and parameters are passed
+		elif len(self.flux) == 0 or len(self.parameters) == 0:
+			raise ValueError('Modelset initiation requires filename or flux and parameter inputs, something is missing')
+
+# READ IN WAVELENGTH ARRAY
+		if len(self.wave)==0:
+			if self.wavefile=='': 
+				self.wavefile = '{}{}.csv'.format(waveprefix,self.instrument)
+				tmp = self.wavefile
+				if os.path.exists(tmp)==False: tmp = os.path.join(MODEL_FOLDER,tmp)
+				if os.path.exists(tmp)==False: tmp = tmp.replace(MODEL_FOLDER,ALT_MODEL_FOLDER)
+				if os.path.exists(tmp)==False: 
+					if ERROR_CHECKING==True:
+						print('Cannot find wavefile {}; check filename or pass wavelength array')
+				else:
+					self.wavefile = tmp
+# read in based on file type
+					ftype = (self.wavefile.split('.'))[-1]
+					delimiter = ''
+# default method: .h5 file with parameters and fluxes
+					if ftype in ['csv']:
+						delimiter = ','
+					elif ftype in ['txt','tsv']:
+						delimiter = r'\s+'
+					else: 
+						if ERROR_CHECKING==True:
+							print('Wave file read in limited to .csv, .txt, and .tsv files')
+					if delimiter != '':
+						dpw = pandas.read_csv(self.wavefile,delimiter=delimiter)
+						cols = list(dpw.columns)
+						if isNumber(cols[0]):
+							dpw = pandas.read_csv(self.wavefile,delimiter=delimiter,names=wavecol)
+							cols = list(dpw.columns)
+						if wavecol in cols: self.wave = numpy.array(dpw[wavecol])
+						else: self.wave = numpy.array(dpw[cols[0]])
+		if len(self.wave)==0:
+			raise ValueError('Warning: wave array was not included; include keyword `wavefile` or pass wavelength array')
+
+# CHECK EVERYTHING LINES UP
+		if isinstance(self.parameters,pandas.core.frame.DataFrame)==False:
+			raise ValueError('Parameter array must be a pandas dataframe')
+		if len(self.wave) != len(self.flux[0,:]):
+			if ERROR_CHECKING==True: print('Warning! wavelength array has {:.0f} values but fluxes have {:.0f} values'.format(len(self.wave),len(self.flux[1])))
+		if len(self.flux[:,0]) != len(self.parameters):
+			if ERROR_CHECKING==True: print('Warning! flux array has {:.0f} spectra but there are {:.0f} parameter sets'.format(len(self.flux[1]),len(self.parameters)))
+
+# FILL IN RELEVANT INFORMATION FROM MODEL ARRAY
+		tmp = checkName(self.instrument,DEFINED_INSTRUMENTS)
+		if isinstance(tmp,bool)==False:
+			self.instrument=tmp
+			self.instrument_parameters = DEFINED_INSTRUMENTS[tmp]
+		tmp = checkName(self.modelname,DEFINED_SPECTRAL_MODELS)
+		if isinstance(tmp,bool)==False:
+			self.modelname=tmp
+			self.model_parameters = DEFINED_SPECTRAL_MODELS[tmp]
+		return
+
+
+	def info(self):
+		'''
+		Basic information
+		'''
+		print('\n{} models for {} instrument'.format(self.modelname,self.instrument))
+		if len(self.model_parameters)>0:
+			print('\nModel Information:')
+			cols = list(self.model_parameters.keys())
+			cols.sort()
+			for x in cols: print('\t{}: {}'.format(x,str(self.model_parameters[x])))
+		if len(self.instrument_parameters)>0:
+			print('\nInstrument Information:')
+			cols = list(self.instrument_parameters.keys())
+			cols.sort()
+			for x in cols: print('\t{}: {}'.format(x,str(self.instrument_parameters[x])))
+		print('\nModel Parameters:')
+		kys = list(self.parameters.columns)
+		kys.sort()
+		for x in ['file']:
+			if x in kys: kys.remove(x)
+		for k in kys:
+			vals = list(set(list(self.parameters[k])))
+			if isNumber(self.parameters.loc[0,k])==True:
+				if len(vals)==1: print('\t{}: {}'.format(k,vals[0]))
+				else: print('\t{}: {} to {}'.format(k,numpy.nanmin(vals),numpy.nanmax(vals)))
+			else:
+				f = vals[0]
+				if len(vals) > 0:
+					for i in vals[1:]: f=f+', {}'.format(i)
+				print('\t{}: {}'.format(k,f))
+		return
 
 
 
@@ -1796,8 +1972,8 @@ STOPPED HERE
 				elif method.lower() in ['integrate','int']:
 					wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapezoid(wts*flx0s[wn],wv0s[wn])/numpy.trapezoid(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapezoid(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapezoid(wts,wv0s[wn]))**0.5
+						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
 					else:
 						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
@@ -1805,13 +1981,13 @@ STOPPED HERE
 					wts = 1./unc0s[wn]**2
 					if numpy.isnan(numpy.nanmin(wts))==True: wts = numpy.ones(len(wv0s[wn]))
 					if cnt > 1: 
-						flx[i] = numpy.trapezoid(wts*flx0s[wn],wv0s[wn])/numpy.trapezoid(wts,wv0s[wn])
-						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapezoid(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapezoid(wts,wv0s[wn]))**0.5
+						flx[i] = numpy.trapz(wts*flx0s[wn],wv0s[wn])/numpy.trapz(wts,wv0s[wn])
+						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.trapz(wts*unc0s[wn]**2,wv0s[wn])/numpy.trapz(wts,wv0s[wn]))**0.5
 					else:
 						flx[i] = numpy.nansum(wts*flx0s[wn])/numpy.nansum(wts)
 						if numpy.isfinite(numpy.nanmax(unc0s))==True: unc[i] = (numpy.nansum(wts*unc0s[wn]**2)/numpy.nansum(wts))**0.5
-					# unc[i] = (numpy.trapezoid(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapezoid(1/unc0[wn]**2,wv0[wn]))**0.5
-					# flx[i] = numpy.trapezoid(flx0[wn],wv0[wn])/numpy.trapezoid(numpy.ones(len(wv0[wn])),wv0[wn])
+					# unc[i] = (numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])/numpy.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
+					# flx[i] = numpy.trapz(flx0[wn],wv0[wn])/numpy.trapz(numpy.ones(len(wv0[wn])),wv0[wn])
 # median by default
 				else:
 					flx[i] = numpy.nanmedian(flx0s[wn])
@@ -1897,6 +2073,7 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 #######################################################
 
 # INFORMATION ON A MODEL
+# UPDATE THIS WITH NEW MODEL STRUCTURE
 def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2473,7 +2650,7 @@ def generateModelSet(modelset,wave=DEFAULT_WAVE,modelpars={},constraints={},init
 		if numpy.isfinite(numpy.nanmedian(flx))==False:
 			if '.txt' in modelpars.loc[i,'file']: delim='\t'
 			elif '.csv' in modelpars.loc[i,'file']: delim=','
-			else: delim='\s+'
+			else: delim=r'\s+'
 			dp = pandas.read_csv(modelpars.loc[i,'file'],delimiter=delim,names=['wave','flux'],comment='#')
 			wv,flx = dp['wave'],dp['flux']
 # don't know what to do

@@ -1,0 +1,13 @@
+astropy
+astroquery
+corner
+matplotlib
+numpy<2.0
+pandas
+tables
+scipy
+statsmodels
+tqdm
+
+[:python_version < "3.9"]
+importlib_resources

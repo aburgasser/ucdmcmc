@@ -67,12 +67,3 @@ def test_models():
 				# for x in list(DEFINED_SPECTRAL_MODELS[mdl]['default'].keys()):
 				# 	assert msp.parameters[x]==par[x]
 
-# check generating models: JWST-NIRSPEC-MIRI --> JWST-NIRSPEC-PRISM
-# this needs to have some test data to go with it
-def test_generate_models():
-	mset = 'morley12'
-	instr1 = 'JWST-NIRSPEC-MIRI'
-	instr2 = 'JWST-NIRSPEC-PRISM'
-	constraints = {'teff':[200,500],'logg':[4.5,5.5]}
-	pass
-
