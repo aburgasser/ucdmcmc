@@ -2193,6 +2193,7 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 
 
 # RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
+# NOTE: THIS FUNCTION WILL BE MADE OBSELETE BY .TOWAVELENGTHS
 def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
 	'''
 	
@@ -2269,6 +2270,8 @@ STOPPED HERE
 # # prepare input wavelength grid
 #	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
 #	 else: wv0 = np.array(copy.deepcopy(wave0))
+
+	print('Warning: resample will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
 
 # prepare output wavelength grid
 	if isUnit(wave): wv=wave.to(sp.wave.unit).value
