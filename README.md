@@ -23,18 +23,19 @@ It is recommended that you install in a conda environment to ensure the dependen
 A check that this worked is that you can import `ucdmcmc` into python/jupyter noteobook, and that the `ucdmcmc.MODEL_FOLDER` points to the models folder that was downloaded
 
 `ucdmcmc` uses the following extenal packages:
-* `astropy`
-* `astroquery`
-* `corner`
-* `emcee`
-* `matplotlib`
-* `numpy<2.0`
-* `pandas`
-* `tables`
-* `requests`
-* `scipy`
-* `statsmodels`
-* `tqdm`
+* `astropy`: https://www.astropy.org/
+* `astroquery`: https://astroquery.readthedocs.io/en/latest/
+* `corner`: https://corner.readthedocs.io/en/latest/
+* `emcee`: https://emcee.readthedocs.io/en/stable/
+* `matplotlib`: https://matplotlib.org/
+* `numpy<2.0`: https://numpy.org/
+* `pandas`: https://pandas.pydata.org/
+* `(py)tables`: https://www.pytables.org/
+* `requests`: https://requests.readthedocs.io/en/latest/
+* `scipy`: https://scipy.org/
+* `spectres`: https://spectres.readthedocs.io/en/latest/
+* `statsmodels`: https://www.statsmodels.org/stable/index.html
+* `tqdm`: https://tqdm.github.io/
 
 ### Optionally install SPLAT
 
