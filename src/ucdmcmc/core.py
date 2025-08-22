@@ -63,10 +63,12 @@ import corner
 import emcee
 import matplotlib.pyplot as plt
 import numpy as np
+np.seterr(all="ignore")
 import pandas
 import requests
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata,interp1d
 import scipy.stats as stats
+import spectres # https://ui.adsabs.harvard.edu/abs/2017arXiv170505165C/abstract
 from statsmodels.stats.weightstats import DescrStatsW
 from tqdm import tqdm
 
@@ -79,7 +81,7 @@ from tqdm import tqdm
 
 
 # code parameters
-VERSION = '2025.08.20'
+VERSION = '2025.08.21'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ERROR_CHECKING = True
@@ -122,25 +124,25 @@ PARAMETER_PLOT_LABELS = {
 
 # parameters
 PARAMETERS = {
-	'teff': {'type': float,'label': r'T$_{eff}$ (K)','fmt': '{:.0f}','step':25,},
-	'logg': {'type': float,'label': r'$\log{g}$ (cm/s$^2$)','fmt': '{:.2f}','step':0.1,},
-	'z': {'type': float,'label': '[M/H]','fmt': '{:.2f}','step':0.1,},
-	'enrich': {'type': float,'label': r'[$\alpha$/Fe]','fmt': '{:.2f}','step':0.05,},
-	'co': {'type': float,'label': 'C/O','fmt': '{:.2f}','step':0.05,},
-	'kzz': {'type': float,'label': r'$\log\kappa_{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,},
-	'fsed': {'type': float,'label': r'$f_{sed}$','fmt': '{:.2f}','step':0.25,},
-	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,},
-	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,},
-	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,},
-	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,}
+	'teff': {'type': float,'label': r'T$_{eff}$ (K)','fmt': '{:.0f}','step':25,'altname': ['temperature','temp','t'],},
+	'logg': {'type': float,'label': r'$\log{g}$ (cm/s$^2$)','fmt': '{:.2f}','step':0.1,'altname': ['gravity','grav','g'],},
+	'z': {'type': float,'label': '[M/H]','fmt': '{:.2f}','step':0.1,'altname': ['metallicity','m/h','fe/h'],},
+	'enrich': {'type': float,'label': r'[$\alpha$/Fe]','fmt': '{:.2f}','step':0.05,'altname': ['alpha','en','a'],},
+	'co': {'type': float,'label': 'C/O','fmt': '{:.2f}','step':0.05,'altname': ['c/o'],},
+	'kzz': {'type': float,'label': r'$\log\kappa_{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,'altname': ['mix','mixing','k'],},
+	'fsed': {'type': float,'label': r'$f_{sed}$','fmt': '{:.2f}','step':0.25,'altname': ['sed','sedimentation','f'],},
+	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,'altname': ['cloud','c'],},
+	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,'altname': ['diffusion','diff','adiabat','gamma'],},
+	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],},
+	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,'altname': ['chi'],}
 }
 
 DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0.05, 'kzz': 0.25, 'fsed': 0.25, 'ad': 0.01}
 
 
 DEFINED_INSTRUMENTS = {
-	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': [''], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
-	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': [''], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
+	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
+	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
 	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
@@ -379,6 +381,72 @@ def isNumber(s):
 		return False
 
 
+# CHECKS IF SOMETHING IS AN ARRAY
+def isArray(s):
+	'''
+
+	Purpose
+	-------
+
+	Checks if something is an array, either list, tuple or numpy array
+
+	Parameters
+	----------
+
+	s : various
+		Quantity to check if unitted
+
+	Outputs
+	-------
+	
+	Returns True if unitted, False if not
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> import numpy as np
+	>>> ucdmcmc.isArray(5)
+
+	False
+	
+	>>> ucdmcmc.isArray([5,6])
+
+	True
+	
+	>>> ucdmcmc.isArray([])
+
+	True
+
+	>>> ucdmcmc.isArray(np.array([4,5]))
+
+	True
+
+	>>> ucdmcmc.isArray((5,6))
+
+	True
+
+	>>> ucdmcmc.isArray({5,6})
+
+	True
+
+	>>> ucdmcmc.isArray({'x':5,'y':6})
+
+	False
+
+	Dependencies
+	------------
+		
+	None
+
+	'''
+
+	return isinstance(s,list) or \
+		isinstance(s,tuple) or \
+		isinstance(s,set) or \
+		isinstance(s,np.ndarray) 
+
+
 # ROTATIONAL BROADENING KERNEL
 def lsfRotation(vsini,vsamp,epsilon=0.6,verbose=ERROR_CHECKING):
 	'''
@@ -595,8 +663,9 @@ class Spectrum(object):
 # option 3: multiple lists or numpy arrays are given
 # interpret as wave, flux, and optionally noise
 		elif len(args) > 1:
-			if (isinstance(args[0],list) or isinstance(args[0],np.ndarray)) and \
-				(isinstance(args[1],list) or isinstance(args[1],np.ndarray)):
+			if isArray(args[0]) and isAarry(args[1]):
+			# if (isinstance(args[0],list) or isinstance(args[0],np.ndarray)) and \
+			# 	(isinstance(args[1],list) or isinstance(args[1],np.ndarray)):
 				self.wave = args[0]
 				self.flux = args[1]
 			else:
@@ -604,7 +673,8 @@ class Spectrum(object):
 				empty=True
 
 			if len(args) > 2:
-				if isinstance(args[2],list) or isinstance(args[2],np.ndarray):
+				if isArray(args[2]):
+#				if isinstance(args[2],list) or isinstance(args[2],np.ndarray):
 					self.noise = args[2]
 		else:
 			pass
@@ -646,7 +716,7 @@ class Spectrum(object):
 		'''
 		:Purpose: Make a copy of a Spectrum object
 		'''
-		s = type(self)()
+		s = type(self)(verbose=False)
 		s.__dict__.update(self.__dict__)
 		return s
 
@@ -665,7 +735,7 @@ class Spectrum(object):
 		return '{} spectrum of {}'.format(self.instrument,self.name)
 
 # map onto a given wavelength scale
-	def toWavelengths(self,wave,force=True,verbose=False,**kwargs):
+	def toWavelengths(self,new_wave,replace=np.nan,verbose=ERROR_CHECKING):
 		'''
 		:Purpose: 
 			Maps a spectrum onto a new wavelength grid via interpolation or integral resampling
@@ -683,8 +753,31 @@ class Spectrum(object):
 		:Example:
 		   TBD
 		'''
-		
-		return resample(self,wave,verbose=verbose,**kwargs)
+
+# check and unit convert new wavelength array
+		nwv = copy.deepcopy(new_wave)
+		if not isArray(nwv):
+			if verbose==True: print('toWavelengths: input wave array {} is not a proper array; no action taken'.format(nwv))
+			return
+		if not isUnit(nwv):
+			if isUnit(nwv[0]): 
+				try: nwv = np.array([(x.to(self.wave.unit)).value for x in nwv])
+				except: 
+					if verbose==True: print('toWavelengths: cannot convert input wave unit {} to spectrum wave unit {} no action taken'.format(nwv[0],self.wave.unit))
+					return
+			nwv = nwv*self.wave.unit
+		try: nwv.to(self.wave.unit)
+		except: 
+			if verbose==True: print('toWavelengths: cannot convert input wave unit {} to spectrum wave unit {} no action taken'.format(nwv.unit,self.wave.unit))
+			return
+
+# use spectres
+#		print(self.wave,self.flux,self.noise)
+		nflx,nns = spectres.spectres(nwv.value,self.wave.value,self.flux.value,spec_errs=self.noise.value,fill=replace,verbose=verbose)
+		self.wave = nwv
+		self.flux = nflx*self.flux.unit
+		self.noise = nns*self.flux.unit
+		return
 
 
 # addition
@@ -702,13 +795,13 @@ class Spectrum(object):
 		   >>> sp3
 			Spectrum of 2MASS J17373467+5953434 + WISE J174928.57-380401.6
 		'''
-# convert wavelength and flux units
-		other.wave = other.wave.to(self.wave.unit)
+# map to wavelength range
+		if self.wave.unit!=other.wave.unit: other.wave = other.wave.to(self.wave.unit)
+		if list(self.wave.value)!=list(other.wave.value): other.toWavelengths(self.wave)
+
+# convert flux units
 		other.flux = other.flux.to(self.flux.unit,equivalencies=u.spectral_density(self.wave))
 		other.noise = other.noise.to(self.flux.unit,equivalencies=u.spectral_density(self.wave))
-
-# map to wavelength range
-		other.toWavelengths(self.wave)
 
 # # make a copy and identify wavelength range that is overlapping
 		sp = copy.deepcopy(self)
@@ -722,10 +815,12 @@ class Spectrum(object):
 #		 n2 = interp1d(other.wave.value,other.variance.value,bounds_error=False,fill_value=0.)
 
 # add & uncertainty
-#		sp.flux = (f1(sp.wave.value)+f2(sp.wave.value))*self.flux.unit
 		sp.flux = self.flux+other.flux
-#		sp.noise = ((n1(sp.wave.value)+n2(sp.wave.value))*(self.flux.unit**2))**0.5
-		sp.noise = ((self.noise.value**2+other.noise.value**2)**0.5)*self.flux.unit
+		if len(self.noise)==len(other.noise) and np.all(np.isnan(self.noise.value))==False and np.all(np.isnan(other.noise.value))==False:
+			sp.noise = ((self.noise.value**2+other.noise.value**2)**0.5)*self.flux.unit
+		elif len(self.noise)==len(sp.flux) and np.all(np.isnan(self.noise.value))==False: sp.noise = self.noise
+		elif len(other.noise)==len(sp.flux) and np.all(np.isnan(other.noise.value))==False: sp.noise = other.noise
+		else: sp.noise = np.array([np.nan]*len(sp.flux))*sp.flux.unit
 
 # update information
 		sp.name = self.name+' + '+other.name
@@ -749,13 +844,13 @@ class Spectrum(object):
 		   >>> sp3
 			Spectrum of 2MASS J17373467+5953434 - WISE J174928.57-380401.6
 		'''
-# convert wavelength and flux units
-		other.wave = other.wave.to(self.wave.unit)
+# map to wavelength range
+		if self.wave.unit!=other.wave.unit: other.wave = other.wave.to(self.wave.unit)
+		if list(self.wave.value)!=list(other.wave.value): other.toWavelengths(self.wave)
+
+# convert flux units
 		other.flux = other.flux.to(self.flux.unit,equivalencies=u.spectral_density(self.wave))
 		other.noise = other.noise.to(self.flux.unit,equivalencies=u.spectral_density(self.wave))
-
-# map to wavelength range
-		other.toWavelengths(self.wave)
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
@@ -771,10 +866,16 @@ class Spectrum(object):
 		# n2 = interp1d(other.wave.value,other.variance.value,bounds_error=False,fill_value=0.)
 
 # subtract & uncertainty
-#		sp.flux = (f1(sp.wave.value)-f2(sp.wave.value))*self.flux.unit
+# #		sp.flux = (f1(sp.wave.value)-f2(sp.wave.value))*self.flux.unit
+# 		sp.flux = self.flux-other.flux
+# #		sp.noise = ((n1(sp.wave.value)+n2(sp.wave.value))*(self.flux.unit**2))**0.5
+# 		sp.noise = ((self.noise.value**2+other.noise.value**2)**0.5)*self.flux.unit
 		sp.flux = self.flux-other.flux
-#		sp.noise = ((n1(sp.wave.value)+n2(sp.wave.value))*(self.flux.unit**2))**0.5
-		sp.noise = ((self.noise.value**2+other.noise.value**2)**0.5)*self.flux.unit
+		if len(self.noise)==len(other.noise) and np.all(np.isnan(self.noise.value))==False and np.all(np.isnan(other.noise.value))==False:
+			sp.noise = ((self.noise.value**2+other.noise.value**2)**0.5)*self.flux.unit
+		elif len(self.noise)==len(sp.flux) and np.all(np.isnan(self.noise.value))==False: sp.noise = self.noise
+		elif len(other.noise)==len(sp.flux) and np.all(np.isnan(other.noise.value))==False: sp.noise = other.noise
+		else: sp.noise = np.array([np.nan]*len(sp.flux))*sp.flux.unit
 
 # update information
 		sp.name = self.name+' - '+other.name
@@ -800,10 +901,8 @@ class Spectrum(object):
 			Spectrum of 2MASS J17373467+5953434 x WISE J174928.57-380401.6
 		'''
 # convert wavelength units
-		other.wave = other.wave.to(self.wave.unit)
-
-# map to wavelength range
-		other.toWavelengths(self.wave)
+		if self.wave.unit!=other.wave.unit: other.wave = other.wave.to(self.wave.unit)
+		if list(self.wave.value)!=list(other.wave.value): other.toWavelengths(self.wave)
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
@@ -822,8 +921,13 @@ class Spectrum(object):
 # uncertainty
 		# sp.variance = np.multiply(sp.flux**2,((np.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(np.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
 		# sp.variance=sp.variance*((self.flux.unit*other.flux.unit)**2)
-		# sp.noise = sp.variance**0.5
-		sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		# sp.noise = sp.variance**0.5		
+		if len(self.noise)==len(other.noise) and np.all(np.isnan(self.noise.value))==False and np.all(np.isnan(other.noise.value))==False:
+			sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		elif len(self.noise)==len(sp.flux) and np.all(np.isnan(self.noise.value))==False: sp.noise = sp.flux*self.noise.value/self.flux.value
+		elif len(other.noise)==len(sp.flux) and np.all(np.isnan(other.noise.value))==False: sp.noise = sp.flux*other.noise.value/other.flux.value
+		else: sp.noise = np.array([np.nan]*len(sp.flux))*sp.flux.unit
+
 		# sp.cleanNoise()
 
 # update information
@@ -849,11 +953,9 @@ class Spectrum(object):
 		   >>> sp3
 			Spectrum of 2MASS J17373467+5953434 + WISE J174928.57-380401.6
 		'''
-# convert wavelength units
-		other.wave = other.wave.to(self.wave.unit)
-
 # map to wavelength range
-		other.toWavelengths(self.wave)
+		if self.wave.unit!=other.wave.unit: other.wave = other.wave.to(self.wave.unit)
+		if list(self.wave.value)!=list(other.wave.value): other.toWavelengths(self.wave)
 
 # make a copy and fill in wavelength to be overlapping
 		sp = copy.deepcopy(self)
@@ -872,10 +974,15 @@ class Spectrum(object):
 		# sp.variance = np.multiply(sp.flux**2,((np.divide(n1(sp.wave.value),f1(sp.wave.value))**2)+(np.divide(n2(sp.wave.value),f2(sp.wave.value))**2)))
 		# sp.variance=sp.variance*((self.flux.unit/other.flux.unit)**2)
 		# sp.noise = sp.variance**0.5
-		sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		if len(self.noise)==len(other.noise) and np.all(np.isnan(self.noise.value))==False and np.all(np.isnan(other.noise.value))==False:
+			sp.noise = (np.multiply(sp.flux.value**2,((np.divide(self.noise.value,self.flux.value)**2)+(np.divide(other.noise.value,other.flux.value)**2)))**0.5)*self.flux.unit*other.flux.unit
+		elif len(self.noise)==len(sp.flux) and np.all(np.isnan(self.noise.value))==False: sp.noise = sp.flux*self.noise.value/self.flux.value
+		elif len(other.noise)==len(sp.flux) and np.all(np.isnan(other.noise.value))==False: sp.noise = sp.flux*other.noise.value/other.flux.value
+		else: sp.noise = np.array([np.nan]*len(sp.flux))*sp.flux.unit
 
 # clean up infinities
 		sp.flux = (np.where(np.absolute(sp.flux.value) == np.inf, np.nan, sp.flux.value))*self.flux.unit/other.flux.unit
+		sp.noise = (np.where(np.absolute(sp.noise.value) == np.inf, np.nan, sp.noise.value))*self.flux.unit/other.flux.unit
 #		sp.cleanNoise()
 
 # update information
@@ -901,7 +1008,180 @@ class Spectrum(object):
 		   >>> sp3
 			Spectrum of 2MASS J17373467+5953434 + WISE J174928.57-380401.6
 		'''
-		return self/other
+		return self.__div__(other)
+
+# replace pixels using a mask
+	def mask(self,mask,action='replace',replace_value=np.nan,mask_flux=True,mask_noise=True,verbose=ERROR_CHECKING):
+		'''
+		:Purpose: 
+
+			Replaces flux and noise values using a mask and specified value
+
+		:Required Inputs:
+
+			:param mask: Either a mask array (an array of booleans, ints, or floats, where True or 1 removes the element)
+				or a 2-element array that defines the wavelength range to replace 
+			:param replace_value: value with which the masked elements should be replaced
+		
+		:Optional Inputs:
+
+			:param replace_flux = True: replace elements in the noise array
+			:param replace_noise = True: replace elements in the flux array
+
+		:Output:
+
+			Spectrum object has the flagged pixels replaced in flux, noise arrays, and optional vectors
+
+		:Example:
+		   >>> import splat, numpy
+		   >>> sp = splat.getSpectrum(lucky=True)[0]
+		   >>> num = splat.numberList('1-10,18,30-50')
+		   >>> mask = [not(p in num) for p in np.arange(len(sp.wave))]
+		   >>> sp.replace(mask,np.nan)
+		   >>> sp.showHistory()
+				SPEX_PRISM spectrum successfully loaded
+				Mask applied to replace 32 pixels with value nan
+		'''
+
+# process mask
+		msk = copy.deepcopy(mask)
+# wavelength range given
+		if len(msk) == 2 and len(self.flux) != 2:
+			if not isUnit(msk): msk = msk*self.wave.unit
+			msk.to(self.wave.unit)
+			w = np.where(np.logical_and(self.wave.value >= np.nanmin(msk.value),self.wave.value <= np.nanmax(msk.value)))
+			msk = np.array([False]*len(self.wave))
+			msk[w] = True
+
+# type of mask should be bool array of same length as flux
+		if len(msk) != len(self.flux):
+			if verbose==True: print('\nWarning: mask must be same length ({}) as wave/flux arrays ({}); not removing any pixels'.format(len(msk),len(self.wave)))
+			return
+		if isinstance(msk[0],float): msk = [int(x) for x in msk]
+		if isinstance(msk[0],int): msk = [True if x==1 else False for x in msk]
+		if not isinstance(msk[0],bool) and not isinstance(msk[0],np.bool_): 
+			if verbose==True: print('\nWarning: cannot interpret mask {}; not removing any pixels'.format(mask))
+			return
+
+# do nothing if msk is eliminating everything
+		msk = np.array([not x for x in msk])
+		if (True in msk) == False: 
+			if verbose==True: print('Mask would {} all elements, revisit with a better mask; no action taken'.format(action))
+			return
+
+# action
+# remove
+		if action.lower() in ['rem','remove','cut']: 
+			self.wave = self.wave[msk]
+			self.flux = self.flux[msk]
+			self.noise = self.noise[msk]
+# replace
+		elif action.lower() in ['rep','replace','sub','substitute']: 
+# check units of replacement value
+			if not np.isnan(replace_value):
+				if not isUnit(replace_value): replace_value = replace_value*self.flux.unit
+				try: replace_value = replace_value.to(self.flux.unit)
+				except:
+					if verbose==True: print('replacement value {} does not have the same unit as flux or unc array ({}); skipping'.format(replace_value,self.flux.unit))
+					return
+			if mask_flux==True: self.flux[msk] = replace_value
+			if mask_noise==True: self.noise[msk] = replace_value
+		else: 
+			if verbose==True: print('\nWarning: ambiguous action {} for mask; no action taken'.format(action))
+
+		return
+
+
+# clean a spectrum by removing/replacing nans
+	def clean(self,action='remove',zeronoise=False,verbose=ERROR_CHECKING,**kwargs):
+		'''
+		:Purpose: 
+
+			Cleans a spectrum by either removing or replacing nan values
+
+		:Required Inputs:
+
+			None
+		
+		:Optional Inputs:
+
+			:param action = 'remove': specify as either 'remove' or 'replace'
+			:param replace_value = 0.: for replace, what value to replace with
+
+		:Output:
+
+			Spectrum object is modified to have nan pixels "cleaned"
+
+		:Example:
+		   >>> import splat,numpy
+		   >>> sp = splat.getSpectrum(lucky=True)[0]
+		   >>> sp.flux[0] = np.nan
+		   >>> sp.clean()
+		   >>> sp.remove(mask)
+		   >>> sp.showHistory()
+				SPEX_PRISM spectrum successfully loaded
+				Mask applied to remove 1 pixels
+		'''
+# clean out data points with nans in flux
+		msk = [np.isnan(x) for x in self.flux.value]
+# clean out data points with nans in noise
+		msk2 = [np.isnan(x) for x in self.noise.value]
+		msk = msk or msk2
+# clean out data points with 0s in noise - using only for data
+		if zeronoise==True:
+			msk2 = [x==0 for x in self.noise.value]
+			msk = msk or msk2
+# mask
+		self.mask(msk,action=action,verbose=verbose,**kwargs)
+		return
+
+
+# mask spectra based on S/N limit
+	def maskSN(self,limit,action='remove',verbose=ERROR_CHECKING,**kwargs):
+		'''
+		Purpose
+		-------
+
+		Apply a mask based on S/N upper limit
+
+		Parameters
+		----------
+
+		limit : float
+			S/N upper limit; all fluxes with values below this S/N are masked
+
+		apply = True : bool [optional]
+			If True, apply the mask using maskFlux()
+
+		Outputs
+		-------
+
+		None: changes the Spectrum object by:
+			* creates and/or sets the mask keyword within the Spectrum object to an array of booleans
+			* if apply==True, masks the relevant range of data
+
+		Example
+		-------
+		
+		TBD
+
+		Dependencies
+		------------
+			`maskFlux()`_
+			`isUnit()`_
+			numpy
+
+		.. _`isUnit()` : api.html#splat.utilities.isUnit
+		.. _`maskFlux()` : api.html#splat.core.maskFlux
+
+		'''
+		if isUnit(limit): limit  = limit.value
+		sn = self.flux.value/self.noise.value
+		msk = [np.isnan(x) for x in sn]
+		msk2 = [x<limit for x in sn]
+		msk = msk or msk2
+		self.mask(msk,action=action,verbose=verbose,**kwargs)
+		return
 
 
 # export spectrum to file
@@ -1000,13 +1280,44 @@ class Spectrum(object):
 
 		return
 
+# convert flux units, including flam <-> fnu
+	def fluxConvert(self,funit=DEFAULT_FLUX_UNIT):
+		'''
+		:Purpose: 
+			Converts flux units, including between r'F\\_nu' and r'F\\_lambda'
+
+		:Inputs:
+=			funit = DEFAULT_FLUX_UNIT : astropy.unit
+				unit to convert flux and noise arrays to
+		
+		:Outputs:
+			changes spectrum object in place
+		
+		:Example:
+		   >>> import splat
+		   >>> import astropy.unit as u
+		   >>> sp = ucdmcmc.getSample('JWST-NIRSPEC-PRISM',verbose=VERBOSE)
+		   >>> sp.fluxConvert(u.Jy)
+		   >>> print(sp.flux.unit)
+			Jy
+		   >>> sp.fluxConvert(ucdmcmc.DEFAULT_FLAM_UNIT)
+		   >>> print(sp.flux.unit)
+			erg / (micron s cm2)
+		'''
+		try:
+			self.flux = self.flux.to(funit,equivalencies=u.spectral_density(self.wave))
+			self.noise = self.noise.to(funit,equivalencies=u.spectral_density(self.wave))
+		except:
+			if verbose==True: print('Unable to convert fluxes from {} to {}; no action taken'.format(self.flux.unit,funit))
+		return
+
 
 # convert to Fnu
+# NOT NEEDED, KEPT FOR BACKWARDS COMPATIBILITY
 	def toFnu(self,funit=DEFAULT_FNU_UNIT):
 		'''
 		:Purpose: 
-			Converts flux density r'F\\_nu' in units of Jy.  
-			There is no change if the spectrum is already in r'F\\_nu' units.
+			Converts to flux density r'F\\_nu' in units of Jy.  
 
 		:Required Inputs:
 			None
@@ -1024,16 +1335,16 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("Jy")
 		'''
-		self.flux = self.flux.to(funit,equivalencies=u.spectral_density(self.wave))
-		self.noise = self.noise.to(funit,equivalencies=u.spectral_density(self.wave))
+		print('Warning: toFnu() will be depracted in future version')
+		self.fluxConvert(funit)
 		return
+
 
 # convert to Flam
 	def toFlam(self,funit=DEFAULT_FLAM_UNIT):
 		'''
 		:Purpose: 
 			Converts flux density to r'F\\_lambda' in units of r'erg/s/cm\\^2/Hz'. 
-			There is no change if the spectrum is already in r'F\\_lambda' units.
 		
 		:Required Inputs:
 			None
@@ -1054,8 +1365,8 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("erg / (cm2 micron s)")
 		'''
-		self.flux = self.flux.to(funit,equivalencies=u.spectral_density(self.wave))
-		self.noise = self.noise.to(funit,equivalencies=u.spectral_density(self.wave))
+		print('Warning: toFlam() will be depracted in future version')
+		self.fluxConvert(funit)
 		return
 
 
@@ -1228,7 +1539,7 @@ class Spectrum(object):
 
 
 # normalize
-	def normalize(self,limits=[],method='median',verbose=ERROR_CHECKING):
+	def normalize(self,limits=[],method='max',verbose=ERROR_CHECKING):
 		'''
 		:Purpose: 
 			Normalize a spectrum to a maximum value of 1 (in its current units) either at a 
@@ -1249,11 +1560,13 @@ class Spectrum(object):
 		   >>> sp.fluxMax()
 		   <Quantity 1.591310977935791 erg / (cm2 micron s)>
 		'''
+		if not isArray(limits): limits = [limits]
 		if len(limits) == 0:
 			limits = [np.nanmin(self.wave.value),np.nanmax(self.wave.value)]
-		elif len(limits) >= 2:
-			if not isinstance(limits,list) and not isinstance(limits,np.ndarray):
-				limits = [limits]
+		if len(limits) == 1:
+			f = interp1d(self.wave.value,self.flux.value)
+			scalefactor = f(limits[0])
+		if len(limits) >= 2:
 			if isUnit(limits[0]): limits = [r.to(self.wave.unit).value for r in limits]
 			if isUnit(limits): limits = limits.to(self.wave.unit).value
 			if np.nanmax(limits) > np.nanmax(self.wave.value) or np.nanmin(limits) < np.nanmin(self.wave.value):
@@ -1265,9 +1578,6 @@ class Spectrum(object):
 			elif method in ['mode']: scalefactor = np.nanmode(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
 			else: scalefactor = np.nanmedian(self.flux.value[np.where(np.logical_and(self.wave.value >= limits[0],self.wave.value <= limits[1]))])
 # single value
-		else:
-			f = interp1d(self.wave.value,self.flux.value)
-			scalefactor = f(limits[0])
 		if isUnit(scalefactor): scalefactor = scalefactor.value
 		if scalefactor == 0. and verbose==True: print('\nWarning: normalize is attempting to divide by zero; ignoring')
 		elif np.isnan(scalefactor) == True and verbose==True: print('\nWarning: normalize is attempting to divide by nan; ignoring')
@@ -1355,7 +1665,7 @@ class Spectrum(object):
 
 # simple plot routine
 	def plot(self,outfile='',xscale='linear',yscale='linear',figsize=[8,5],fontscale=1,
-		xlabel='Wavelength',ylabel='Flux',ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+		xlabel='',ylabel='',ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 		'''
 		:Purpose: 
 
@@ -1374,12 +1684,27 @@ class Spectrum(object):
 		strue = self.wave.value[np.isnan(self.flux.value)==False]
 		wrng = [np.nanmin(strue),np.nanmax(strue)]
 
+# axis labels based on units
+# x-axis can be wavelength or frequency unless alternately specified
+		if xlabel=='': 
+			try:
+				x = (self.wave.unit).to(u.m)
+				xlabel = r'Wavelength ({})'.format(self.wave.unit)
+			except:
+				xlabel = r'Frequency ({})'.format(self.wave.unit)
+		if ylabel=='': 
+			try:
+				x = (self.flux.unit).to(u.Jy)
+				ylabel = r'F$_\nu$ ({})'.format(self.flux.unit)
+			except:
+				ylabel = r'F$_\lambda$ ({})'.format(self.flux.unit)
+
 		plt.clf()
 		plt.figure(figsize=figsize)
 		plt.step(self.wave.value,self.flux.value,'k-',linewidth=2,label=self.name)
 		plt.legend(fontsize=14*fontscale,loc=legend_loc)
 		plt.plot([np.nanmin(self.wave.value),np.nanmax(self.wave.value)],[0,0],'k--')
-		plt.fill_between(self.wave.value,self.noise.value,-1.*self.noise.value,color='k',alpha=0.3)
+		plt.fill_between(self.wave.value,self.noise.value,-1.*self.noise.value,step='mid',color='k',alpha=0.3)
 		plt.xscale(xscale)
 		plt.yscale(yscale)
 		if ylim==None:
@@ -1505,6 +1830,7 @@ class Spectrum(object):
 		'''
 
 # single number = turn into small range
+# NEED TO REPLACE WITH AN INTERPOLATION
 		if isinstance(rng,float):
 			rng = [rng-0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value)),rng+0.01*(np.nanmax(self.wave.value)-np.nanmin(self.wave.value))]
 
@@ -1529,7 +1855,7 @@ class Spectrum(object):
 			if verbose==True: print('Sampling range {} outside wavelength range of data'.format(rng))
 			return np.nan
 
-
+# trim spectrum
 	def trim(self,rng,**kwargs):
 		'''
 		:Purpose: 
@@ -1867,7 +2193,6 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 
 
 # RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
-# NOTE: need to rework this using Johnson method
 def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
 	'''
 	
@@ -2414,10 +2739,14 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 		file=copy.deepcopy(modelset)
 	elif os.path.exists(os.path.join(MODEL_FOLDER,modelset))==True: 
 		file=os.path.join(MODEL_FOLDER,modelset)
+	elif os.path.exists(os.path.join(ALT_MODEL_FOLDER,modelset))==True: 
+		file=os.path.join(ALT_MODEL_FOLDER,modelset)
 	elif os.path.exists('{}{}_{}.h5'.format(file_prefix,modelset,instrument))==True: 
 		file = '{}{}_{}.h5'.format(file_prefix,modelset,instrument)
-	else: 
+	elif os.path.exists(os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument)))==True: 
 		file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))
+	else:
+		file = os.path.join(ALT_MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))
 	if verbose==True: print('Using model data file {}'.format(file))
 	if os.path.exists(file)==False:
 		print('WARNING: model set file for {} cannot be found, check your file name'.format(modelset))
@@ -2640,7 +2969,8 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 		if isinstance(wave,str):
 			wave0 = readWave(wave,verbose=verbose)
 # check if unitted and convert if so
-		elif isinstance(wave,list) or isinstance(wave,np.ndarray):
+		elif isArray(wave):
+#		elif isinstance(wave,list) or isinstance(wave,np.ndarray):
 			if len(wave)==0:
 				wave = generateWave(DEFAULT_WAVE_RANGE,DEFAULT_RESOLUTION,method='resolution',verbose=ERROR_CHECKING)
 			if isUnit(wave): wave0 = wave.to(DEFAULT_WAVE_UNIT).value
@@ -2812,7 +3142,7 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 # NEED TO ADD - FORMAT STRING FROM PARAMETERS
 	for x in kys: 
 		name=name+'{}={} '.format(x,smdls.loc[0,x])
-	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name=name)
+	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,noise=np.array([np.nan]*len(wave))*DEFAULT_FLUX_UNIT,name=name)
 	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
 	mdl.parameters = dict(smdls.loc[0,:])
 	for x in [flux_name,'file']:
@@ -2995,7 +3325,7 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 # NEED TO ADD - FORMAT STRING FROM PARAMETERS
 	for x in list(par0.keys()): 
 		name=name+'{}={} '.format(x,par0[x])
-	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,name=name)
+	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,noise=np.array([np.nan]*len(wave))*DEFAULT_FLUX_UNIT,name=name)
 	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
 	mdl.parameters = par0
 	return mdl
