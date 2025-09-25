@@ -153,8 +153,8 @@ def test_scale():
 def test_shift():
 	sp = getSample('SPEX-PRISM',verbose=VERBOSE)
 	pshft = 0.5
-	wshft = numpy.nanmedian(sp.wave.value-numpy.roll(sp.wave.value,1))*pshft*sp.wave.unit
-	rvshft = (wshft.value/numpy.nanmedian(sp.wave.value))*const.c
+	wshft = np.nanmedian(sp.wave.value-np.roll(sp.wave.value,1))*pshft*sp.wave.unit
+	rvshft = (wshft.value/np.nanmedian(sp.wave.value))*const.c
 	sp1 = copy.deepcopy(sp)
 	sp1.shift(pshft)
 	sp2 = copy.deepcopy(sp)

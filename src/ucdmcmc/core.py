@@ -141,7 +141,7 @@ PARAMETERS = {
 	'wshift': {'type': float,'label': r'$\Delta\lambda$ (Ang)','fmt': '{:.2f}','step':0.01,'altname': ['wave shift','delta wave','dwave','dw'],'default': 0.,'limits':[-1000,1000]},
 	'rv': {'type': float,'label': r'RV (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['radial velocity','velocity','vrad'],'default': 0.,'limits':[-3000,3000]},
 	'vsini': {'type': float,'label': r'$v\sin{i}$ (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['rotational velocity','rotation','rot','vrot'],'default': 0.,'limits':[0,1000]},
-	'lsf': {'type': float,'label': r'LSF ($\mu$m)','fmt': '{:.3f}','step':1.e-4,'altname': ['line spread function','line broadening','broad','broadening'],'default': 0.,'limits':[0,10]},
+	'lsf': {'type': float,'label': r'LSF ($\mu$m)','fmt': '{:.3f}','step':1.e-4,'altname': ['line spread function','line broadening','broadening'],'default': 0.,'limits':[0,10]},
 	'foff': {'type': float,'label': r'$\epsilon_f$','fmt': '{:.2f}','step':0.01,'altname': ['flux shift','flux offset','dflux','eflux','df','ef'],'default': 0.,'limits':[-10,10]},
 	'telluric': {'type': float,'label': r'$\alpha$','fmt': '{:.2f}','step':0.01,'altname': ['tellabs','tell'],'default': 0.,'limits':[0,10]},
 	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],'default': 0.08,'limits':[0,1000]},

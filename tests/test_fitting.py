@@ -1,5 +1,5 @@
 import os
-from ucdmcmc import getSample,fitGrid, fitMCMC, fitEMCEE
+from ucdmcmc import getSample,fitGrid, fitMCMC, fitEMCEE, DEFINED_SPECTRAL_MODELS, DEFINED_INSTRUMENTS, MODEL_FOLDER, MODEL_FILE_PREFIX
 
 VERBOSE = True
 
