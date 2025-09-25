@@ -9,6 +9,7 @@ __pycache__
 # Packages/installer info
 *.egg
 *.egg-info
+*.pyc
 dist
 build
 eggs
@@ -23,6 +24,7 @@ develop-eggs
 .cache
 .tox
 .idea/
+.ipynb_checkpoints/
 
 # backup files
 *~ 

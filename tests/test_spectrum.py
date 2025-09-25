@@ -5,6 +5,7 @@
 import numpy as np
 import copy
 import astropy.units as u
+import astropy.constants as const
 from ucdmcmc import Spectrum,getSample,DEFAULT_FLUX_UNIT,DEFINED_INSTRUMENTS,DEFAULT_FLAM_UNIT,DEFAULT_FNU_UNIT
 
 VERBOSE = True
@@ -147,4 +148,20 @@ def test_scale():
 	assert sp.flux.unit == u.mJy
 	assert np.nanmedian(sp.flux.value) > np.nanmedian(sp1.flux.value)
 	return
+
+# test shifting
+def test_shift():
+	sp = getSample('SPEX-PRISM',verbose=VERBOSE)
+	pshft = 0.5
+	wshft = numpy.nanmedian(sp.wave.value-numpy.roll(sp.wave.value,1))*pshft*sp.wave.unit
+	rvshft = (wshft.value/numpy.nanmedian(sp.wave.value))*const.c
+	sp1 = copy.deepcopy(sp)
+	sp1.shift(pshft)
+	sp2 = copy.deepcopy(sp)
+	sp2.shift(wshft)
+	sp3 = copy.deepcopy(sp)
+	sp3.shift(rvshft)
+	assert sp1.wave.value[np.argmax(sp1.flux.value)]>sp.wave.value[np.argmax(sp.flux.value)]
+	assert sp1.wave.value[np.argmax(sp1.flux.value)]>sp2.wave.value[np.argmax(sp2.flux.value)]
+	assert sp2.wave.value[np.argmax(sp2.flux.value)]>sp3.wave.value[np.argmax(sp3.flux.value)]
 

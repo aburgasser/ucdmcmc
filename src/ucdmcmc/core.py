@@ -1,5 +1,4 @@
 """
-
 	ucdmcmc
 
 	Package Description
@@ -18,9 +17,9 @@
 	* atmo20pp - ATMO2020++ model set from Meisner et al. (2023) bibcode: 2023AJ....166...57M
 	* btdusty16 - BT-Dusty model set from TBD bibcode: TBD
 	* btsettl08 - BT-Settled model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A
-	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024arXiv240200758M
-	* drift - Drift model set from Witte et al. (2011) bibcode: 2011A&A...529A..44W
-	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024arXiv240200756M
+	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024ApJ...975...59M
+	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024ApJ...963...73M
+	* elfowl24-ph3 - Sonora Elfowl model set with PH3 kept a vertical mixing abundance from Beiler et al. (2024) bibcode: 2024ApJ...973...60B
 	* karalidi21 - Sonora Cholla model set from Karalidi et al. (2021) bibcode: 2021ApJ...923..269K
 	* lowz - LOWZ model set from Meisner et al. (2021) bibcode: 2021ApJ...915..120M
 	* sand24 - SAND model set from Alvardo et al. (2024) bibcode: 2024RNAAS...8..134A
@@ -29,24 +28,35 @@
 
 	These are calculated for a subset of the following instruments:
 
-	* NIR: generic low resolution NIR range, covering 0.85-2.4 micron at ma edian resolution of 442
-	* SPEX-PRISM: IRTF SpeX PRISM mode, covering 0.65-2.56 micron at a median resolution of 423, using data from 
-		Burgasser et al. (2006) as a template
-	* JWST-NIRSPEC-PRISM: JWST NIRSPEC PRISM, covering 0.5--6 micron at a median resolution of 590, using data from 
-		Burgasser et al. (2024) as a template
-	* JWST-NIRSPEC-G395H: JWST NIRSPEC G395H, covering 0.5--6 micron at a median resolution of 590, using data from 
-		Burgasser et al. (2024) as a template
-	* JWST-MIRI-LRS: JWST MIRI LRS, covering 4.55--13.5 micron at a median resolution of XXX,
-		using data from TBD as a template
-	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 2.8-5.2 micron at a median resolution of XXX,
-		using data from Beiler et al. (2024) as a template
+	* EUCLID: template for Euclid IR spectral data, covering 0.9-1.9 micron data at a median resolution of 350
+		[no template at this time]
+	* NIR: generic low resolution NIR range, covering 0.85-2.4 micron at a median resolution of 442,
+	* SPEX-PRISM: IRTF SpeX PRISM mode, covering 0.65-2.56 micron at a median resolution of 423, 
+		using data for 2MASS J0559-1404 from Burgasser et al. (2006) as a template
+	* JWST-NIRSPEC-PRISM: JWST NIRSPEC PRISM, covering 0.5--6 micron at a median resolution of [TBD],
+		using data for UNCOVER 33436 from Burgasser et al. (2024) as a template
+	* JWST-NIRSPEC-G395H: JWST NIRSPEC G395H, covering 0.5--6 micron at a median resolution of 590
+		[no template at this time]
+	* JWST-MIRI-LRS: JWST MIRI LRS, covering 4.55--13.5 micron at a median resolution of [TBD]
+		[no template at this time]
+	* JWST-NIRSPEC-MIRI: combination of NIRSPEC PRISM and MIRI LRS, covering 2.8-5.2 micron at a median resolution of [TBD],
+		using data for SDSS J1624+0029 from Beiler et al. (2024) as a template.
 
 
+	More information can be found at the ucdmcmc github page at http://www.github.com/aburgasser/ucdmcmc/
+
+	If you use this code for your work, please cite the zenodo link with the appropriate version: https://doi.org/10.5281/zenodo.16923762
 """
 
 # WHAT NEEDS TO BE DONE
+# - emcee fitting
 # - add in examples for JWST MIRI LRS and NIRSPEC G395H
+# - fitting in f_nu or f_lam
+# - shift model functions to model class
+# - more robust reddening function
 # - comparison plot with x and y log scales
+# - swtich from print statements to logging
+# - telluric corection/fitting
 
 # basic packages
 import copy
@@ -71,7 +81,7 @@ import scipy.stats as stats
 import spectres # https://ui.adsabs.harvard.edu/abs/2017arXiv170505165C/abstract
 from statsmodels.stats.weightstats import DescrStatsW
 from tqdm import tqdm
-
+import warnings
 
 #######################################################
 #######################################################
@@ -80,11 +90,14 @@ from tqdm import tqdm
 #######################################################
 
 
-# code parameters
-VERSION = '2025.08.21'
+# reference parameters
+VERSION = '2025.09.24'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
-ERROR_CHECKING = True
+ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
+DOI = '10.5281/zenodo.16923762'
+
+# folders
 CODE_PATH = os.path.dirname(os.path.abspath(__file__))
 MODEL_FOLDER = os.path.join(CODE_PATH,'models/')
 MODEL_URL = "http://spexarchive.coolstarlab.ucsd.edu/ucdmcmc"
@@ -101,45 +114,46 @@ DEFAULT_FNU_UNIT = u.Jy
 DEFAULT_WAVE_NAME = 'wave'
 DEFAULT_FLUX_NAME = 'flux'
 DEFAULT_NOISE_NAME = 'noise'
-DEFAULT_PARAMETERS_NAME = 'noise'
 
 # baseline wavelength grid
-DEFAULT_WAVE_RANGE = [0.9,2.45]
+DEFAULT_WAVE_RANGE = [1.,5.]
 DEFAULT_RESOLUTION = 300
 
-# parameters
-PARAMETER_PLOT_LABELS = {
-	'teff':r'T$_{eff}$ (K)',
-	'logg':r'$\log{g}$ (cm/s$^2$)',
-	'z':'[M/H]',
-	'enrich':r'[$\alpha$/Fe]',
-	'co':'C/O',
-	'kzz':r'$\log\kappa_{zz}$ (cm$^2$/s)',
-	'fsed':r'$f_{sed}$',
-	'cld':'Cloud Model',
-	'ad':r'$\gamma$',
-	'radius':r'R (R$_\odot$)',
-	'chis':r'$\chi^2$',
-}
+# code parameters
+ERROR_CHECKING = True
+if ERROR_CHECKING==False: warnings.filterwarnings("ignore") 
+
 
 # parameters
 PARAMETERS = {
-	'teff': {'type': float,'label': r'T$_{eff}$ (K)','fmt': '{:.0f}','step':25,'altname': ['temperature','temp','t'],},
-	'logg': {'type': float,'label': r'$\log{g}$ (cm/s$^2$)','fmt': '{:.2f}','step':0.1,'altname': ['gravity','grav','g'],},
-	'z': {'type': float,'label': '[M/H]','fmt': '{:.2f}','step':0.1,'altname': ['metallicity','m/h','fe/h'],},
-	'enrich': {'type': float,'label': r'[$\alpha$/Fe]','fmt': '{:.2f}','step':0.05,'altname': ['alpha','en','a'],},
-	'co': {'type': float,'label': 'C/O','fmt': '{:.2f}','step':0.05,'altname': ['c/o'],},
-	'kzz': {'type': float,'label': r'$\log\kappa_{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,'altname': ['mix','mixing','k'],},
-	'fsed': {'type': float,'label': r'$f_{sed}$','fmt': '{:.2f}','step':0.25,'altname': ['sed','sedimentation','f'],},
-	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,'altname': ['cloud','c'],},
-	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,'altname': ['diffusion','diff','adiabat','gamma'],},
-	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],},
-	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,'altname': ['chi'],}
+	'teff': {'type': float,'label': r'T$_{eff}$ (K)','fmt': '{:.0f}','step':25,'altname': ['temperature','temp','t'],'default': 1000,'limits':[0,10000]},
+	'logg': {'type': float,'label': r'$\log{g}$ (cm/s$^2$)','fmt': '{:.2f}','step':0.1,'altname': ['gravity','grav','g'],'default': 5.0,'limits':[0,8.0]},
+	'z': {'type': float,'label': '[M/H]','fmt': '{:.2f}','step':0.1,'altname': ['metallicity','m/h','fe/h'],'default': 0.,'limits':[-6,2]},
+	'enrich': {'type': float,'label': r'[$\alpha$/Fe]','fmt': '{:.2f}','step':0.05,'altname': ['alpha','alpha/fe','en','a'],'default': 0.,'limits':[-6,2]},
+	'co': {'type': float,'label': 'C/O','fmt': '{:.2f}','step':0.05,'altname': ['c/o'],'default': 0.458,'limits':[0,10]},
+	'kzz': {'type': float,'label': r'$\log\kappa_\mathrm{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,'altname': ['mix','mixing','k'],'default': 4.,'limits':[0,20]},
+	'fsed': {'type': float,'label': r'$f_\mathrm{sed}$','fmt': '{:.2f}','step':0.25,'altname': ['sed','sedimentation','f'],'default': 4.,'limits':[0,20]},
+	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,'altname': ['cloud','c'],'default': '','limits':[]},
+	'broad': {'type': str,'label': 'Pressure Line Broadening','fmt': '{}','step':-99,'altname': ['brd','b'],'default': '','limits':[]},
+	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,'altname': ['diffusion','diff','adiabat','gamma'],'default': 1.0,'limits':[0,2]},
+	'av': {'type': float,'label': r'$A_V$','fmt': '{:.2f}','step':0.01,'altname': ['reddening','extinction','ext','red'],'default': 0.,'limits':[0,1000]},
+	'pshift': {'type': float,'label': r'$\Delta$p','fmt': '{:.2f}','step':0.01,'altname': ['pixel shift','pixshift','delta pixel','dpix','dp'],'default': 0.,'limits':[-1000,1000]},
+	'wshift': {'type': float,'label': r'$\Delta\lambda$ (Ang)','fmt': '{:.2f}','step':0.01,'altname': ['wave shift','delta wave','dwave','dw'],'default': 0.,'limits':[-1000,1000]},
+	'rv': {'type': float,'label': r'RV (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['radial velocity','velocity','vrad'],'default': 0.,'limits':[-3000,3000]},
+	'vsini': {'type': float,'label': r'$v\sin{i}$ (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['rotational velocity','rotation','rot','vrot'],'default': 0.,'limits':[0,1000]},
+	'lsf': {'type': float,'label': r'LSF ($\mu$m)','fmt': '{:.3f}','step':1.e-4,'altname': ['line spread function','line broadening','broad','broadening'],'default': 0.,'limits':[0,10]},
+	'foff': {'type': float,'label': r'$\epsilon_f$','fmt': '{:.2f}','step':0.01,'altname': ['flux shift','flux offset','dflux','eflux','df','ef'],'default': 0.,'limits':[-10,10]},
+	'telluric': {'type': float,'label': r'$\alpha$','fmt': '{:.2f}','step':0.01,'altname': ['tellabs','tell'],'default': 0.,'limits':[0,10]},
+	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],'default': 0.08,'limits':[0,1000]},
+	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,'altname': ['chi'],'default': 1.,'limits':[0,1e30]}
 }
+ALT_PARAMETERS = ['av','pshift','wshift','rv','vsini','lsf','foff']
+PARAMETER_PLOT_LABELS = {}
+for x in list(PARAMETERS.keys()): PARAMETER_PLOT_LABELS[x] = PARAMETERS[x]['label']
+DEFAULT_MCMC_STEPS = {}
+for x in list(PARAMETERS.keys()): DEFAULT_MCMC_STEPS[x] = PARAMETERS[x]['step']
 
-DEFAULT_MCMC_STEPS = {'teff': 25, 'logg': 0.1, 'z': 0.1, 'enrich': 0.05, 'co': 0.05, 'kzz': 0.25, 'fsed': 0.25, 'ad': 0.01}
-
-
+# instruments
 DEFINED_INSTRUMENTS = {
 	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
@@ -154,28 +168,31 @@ DEFINED_INSTRUMENTS = {
 DEFINED_SPECTRAL_MODELS = {\
 	'atmo20': {'instruments': {}, 'name': 'ATMO2020', 'citation': 'Phillips et al. (2020)', 'bibcode': '2020A%26A...637A..38P', 'altname': ['atmos','phillips','phi20','atmos2020','atmos20','atmo2020','atmo20'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'kzz': 0.,'cld': 'LC','broad': 'A','ad': 1.0,'logpmin': -8, 'logpmax': 4}}, \
 	'atmo20pp': {'instruments': {}, 'name': 'ATMO2020++', 'citation': 'Meisner et al. (2023)', 'bibcode': '2023AJ....166...57M', 'altname': ['atmo','atmo++','meisner23','mei23','atmo2020++','atmo20++','atmos2020++','atmos20++'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0.0,'kzz': 5.0}}, \
+	'btcond': {'instruments': {}, 'name': 'BT Cond', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['dusty-cond','bt-cond','btc'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btdusty16': {'instruments': {}, 'name': 'BT Dusty 2016', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['btdusty2016','dusty16','dusty2016','dusty-bt','bt-dusty','bt-dusty2016','btdusty','bt-dusty16','btd'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btsettl08': {'instruments': {}, 'name': 'BT Settl 2008', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['allard','allard12','allard2012','btsettl','btsettled','btsettl08','btsettl2008','BTSettl2008','bts','bts08'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'enrich': 0.}}, \
+#	'btsettl15': {'instruments': {}, 'name': 'BT Settl 2015', 'citation': 'Allard et al. (2015)', 'bibcode': '2015A&A...577A..42B', 'altname': ['allard15','allard2015','btsettl015','btsettl2015','BTSettl2015','bts15'],  'default': {'teff': 1500., 'logg': 5.0, 'z': 0.}}, \
 	'burrows06': {'instruments': {}, 'name': 'Burrows et al. (2006)', 'citation': 'Burrows et al. (2006)', 'bibcode': '2006ApJ...640.1063B', 'altname': ['burrows','burrows2006'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
-	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024arXiv240200758M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
+	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024ApJ...975...59M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
+	# 'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
 	'elfowl24-ph3': {'instruments': {}, 'name': 'Sonora Elfowl + PH3', 'citation': 'Beiler et al. (2024)', 'bibcode': '2024ApJ...973...60B', 'altname': ['elfowl-ph3','sonora-elfowl-ph3','beiler24','beiler','bei24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['kitzmann20','kitzmann2020','kit20','helios-r2','helios20','helios2020'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
 	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 2., 'co': 0.85}}, \
+	'madhu11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
+	'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
+	'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
 	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
+	'saumon12': {'instruments': {}, 'name': 'Saumon et al. (2012)', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
-	'tremblin15': {'instruments': {}, 'name': 'Tremblin et al. 2015', 'citation': 'Tremblin et al. 2015', 'bibcode': '2015ApJ...804L..17T', 'altname': ['tremblin','tre15','tremblin2015'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0, 'kzz': 8.0, 'ad': 1.20}}, \
+	'sphinx23': {'instruments': {}, 'name': 'SPHINX', 'citation': 'Iyer et al. (2023)', 'bibcode': '2023ApJ...944...41I', 'altname': ['sphinx2023','sphinx','iyer2023','iyer','iyer23'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
+	'tremblin15': {'instruments': {}, 'name': 'Tremblin et al. (2015)', 'citation': 'Tremblin et al. (2015)', 'bibcode': '2015ApJ...804L..17T', 'altname': ['tremblin','tre15','tremblin2015'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0, 'kzz': 8.0, 'ad': 1.20}}, \
 	# 'saumon12': {'instruments': {}, 'name': 'Saumon et al. 2012', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12','saumon2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
-	# 'btcond': {'instruments': {}, 'name': 'BT Cond', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['dusty-cond','bt-cond','btc'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	# 'btnextgen': {'instruments': {}, 'name': 'BT NextGen', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['nextgen-bt','btnextgen','btn'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.}}, \
-	# 'btsettl15': {'instruments': {}, 'name': 'BT Settl 2015', 'citation': 'Allard et al. (2015)', 'bibcode': '2015A&A...577A..42B', 'altname': ['allard15','allard2015','btsettl015','btsettl2015','BTSettl2015','bts15'],  'default': {'teff': 1500., 'logg': 5.0, 'z': 0.}}, \
 	# 'cond01': {'instruments': {}, 'name': 'AMES Cond', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['cond','cond-ames','amescond'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
-	# 'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'dusty01': {'instruments': {}, 'name': 'AMES Dusty', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['dusty','dusty-ames','amesdusty'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
-	# 'madhusudhan11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
-	# 'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
-	# 'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
 	# 'saumon08': {'instruments': {}, 'name': 'Saumon & Marley 2008', 'citation': 'Saumon & Marley 2008', 'bibcode': '2008ApJ...689.1327S', 'altname': ['sau08','saumon2008'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'sonora18': {'instruments': {}, 'name': 'Sonora Alpha', 'citation': 'Marley et al. (2018)', 'bibcode': 'marley_mark_2018_1309035', 'altname': ['marley','marley18','marley2018','sonora2018'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
 	# 'gerasimov20': {'instruments': {}, 'name': 'Gerasimov et al. 2020', 'citation': 'Gerasimov et al. (2020)', 'bibcode': '2020RNAAS...4..214G', 'altname': ['phxlowz','ger20'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
@@ -185,10 +202,10 @@ DEFINED_SPECTRAL_MODELS = {\
 # welcome message on load in
 print('\n\nWelcome to the UCDMCMC spectral fitting code!')
 print('This code is designed to conduct both grid and MCMC fitting of spectral data of ultracool dwarfs')
-print('You are currently using version {}\n'.format(VERSION))
-# print('If you make use of any features of this toolkit for your research, please remember to cite the SPLAT paper:')
-# print('\n{}; Bibcode: {}\n'.format(CITATION,BIBCODE))
-# print('If you make use of any spectra or models in this toolkit, please remember to cite the original source.')
+print('You are currently using version dated {}\n'.format(VERSION))
+print('If you make use of this code for your research, please remember to cite our Zenodo DOI:')
+print('\t{} ({})'.format(DOI,ZENODO_URL))
+print('If you make use of any spectra or models in this toolkit, please remember to cite the original source.')
 print('Please report any errors are feature requests to our github page, {}\n\n'.format(GITHUB_URL))
 if ERROR_CHECKING==True: print('Currently running in error checking mode')
 
@@ -210,6 +227,61 @@ if os.path.exists(ALT_MODEL_FOLDER)==False:
 
 # DATA DOWNLOADER
 def downloadModel(file,url=MODEL_URL,targetdir=ALT_MODEL_FOLDER,verbose=ERROR_CHECKING):
+	'''
+	TBD
+	Purpose
+	-------
+
+	General usage program to check if a key is present in a dictionary, with the option to look through alternate names
+
+	Parameters
+	----------
+
+	ref : str
+		A string that corresponds to the relevant key
+
+	refdict: dict
+		Dictionary for which to search for a key
+
+	altref = 'altname' : str
+		If present, and refdict is a dictionary of dictionaries, will check the altname keys of the embedded dictionaries
+		to identify alternate names
+
+	output = False : bool
+		Default returned value if key is missing
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns the correct key from the dictionary, or if missing the value specified by output
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	'lowz'
+
+	>>> ucdmcmc.checkName('me',ucdmcmc.DEFINED_SPECTRAL_MODELS)
+
+	Could not find item me in input dictionary; try: ['atmo20', 'btdusty16', 'btsettl08', 'burrows06', 
+	'dback24', 'elfowl24', 'lowz', 'saumon12', 'sonora21', 'sand24']
+	False
+
+	Dependencies
+	------------
+		
+	copy
+
+	'''
 # already have it?
 	files = glob.glob(os.path.join(targetdir,file))
 	if len(files)>0:
@@ -734,6 +806,46 @@ class Spectrum(object):
 		'''
 		return '{} spectrum of {}'.format(self.instrument,self.name)
 
+	def info(self,file=''):
+		'''
+		:Purpose: 
+			Provides a brief summary of relevant properties of a spectrum
+
+		:Required Inputs:
+			None
+
+		:Optional Inputs:
+			file = '' | str
+			file to save information to if desired; by default prints to screen 
+
+		
+		:Outputs:
+			None
+
+		:Example:
+		   TBD
+		'''
+
+# check and unit convert new wavelength array
+		line = '\n{} spectrum of {}\n'.format(self.instrument,self.name)
+		line=line+'\nWave range = {:.2f}--{:.2f} {}'.format(np.nanmin(self.wave.value),np.nanmax(self.wave.value),self.wave.unit) 
+		line=line+'\nFlux range = {:.2e}--{:.2e} {}'.format(np.nanmin(self.flux.value),np.nanmax(self.flux.value),self.flux.unit)
+		res = np.nanmedian(self.wave.value)/np.nanmedian(self.wave.value-np.roll(self.wave.value,1))
+		line=line+'\nAverage 1-pixel resolution = {:.0f}'.format(res)
+		snr = self.flux.value/self.noise.value
+		snrq = np.nanquantile(snr,[0.5,0.9])
+		line=line+'\nS/N = {:.0f} (50%), {:.0f} (90%)\n'.format(snrq[0],snrq[1])
+# optional parameters:		
+		if hasattr(self,'citation'): line=line+'\nSpectrum reference {}'.format(self.citation)
+		if hasattr(self,'bibcode'): line=line+'\nCitation bibcode reference {} (https://ui.adsabs.harvard.edu/abs/{}/abstract)\n'.format(self.bibcode,self.bibcode)
+		if file != '':
+			ww = openw(file,'w')
+			ww.printf(line)
+			ww.close()
+		else: print(line)
+		return
+
+
 # map onto a given wavelength scale
 	def toWavelengths(self,new_wave,replace=np.nan,verbose=ERROR_CHECKING):
 		'''
@@ -1010,6 +1122,7 @@ class Spectrum(object):
 		'''
 		return self.__div__(other)
 
+
 # replace pixels using a mask
 	def mask(self,mask,action='replace',replace_value=np.nan,mask_flux=True,mask_noise=True,verbose=ERROR_CHECKING):
 		'''
@@ -1064,7 +1177,6 @@ class Spectrum(object):
 			return
 
 # do nothing if msk is eliminating everything
-		msk = np.array([not x for x in msk])
 		if (True in msk) == False: 
 			if verbose==True: print('Mask would {} all elements, revisit with a better mask; no action taken'.format(action))
 			return
@@ -1072,6 +1184,7 @@ class Spectrum(object):
 # action
 # remove
 		if action.lower() in ['rem','remove','cut']: 
+			msk = np.array([not x for x in msk])
 			self.wave = self.wave[msk]
 			self.flux = self.flux[msk]
 			self.noise = self.noise[msk]
@@ -1335,12 +1448,13 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("Jy")
 		'''
-		print('Warning: toFnu() will be depracted in future version')
+		print('Warning: toFnu() will be depracted in a future version')
 		self.fluxConvert(funit)
 		return
 
 
 # convert to Flam
+# NOT NEEDED, KEPT FOR BACKWARDS COMPATIBILITY
 	def toFlam(self,funit=DEFAULT_FLAM_UNIT):
 		'''
 		:Purpose: 
@@ -1365,32 +1479,115 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("erg / (cm2 micron s)")
 		'''
-		print('Warning: toFlam() will be depracted in future version')
+		print('Warning: toFlam() will be depracted in a future version')
 		self.fluxConvert(funit)
+		return
+
+# convert wave units
+	def toWaveUnit(self,wave_unit,verbose=ERROR_CHECKING):
+		'''
+		:Purpose: 
+			Converts wavelength to specified units. 
+		
+		:Required Inputs:
+			None
+		
+		:Optional Inputs:
+			None
+		
+		:Outputs:
+			None; Spectrum object is changed
+
+		:Example:
+		   >>> import splat
+		   >>> import astropy.units as u
+		   >>> sp = splat.Spectrum(file='somespectrum',wave_unit=u.Angstrom)
+		   >>> print(sp.wave.unit)
+			 Angstrom
+		   >>> sp.toWaveUnit(u.micron)
+		   >>> print(sp.wave.unit)
+			 micron
+		   >>> sp.toWaveUnit(u.s)
+			 Warning! failed to convert wavelength unit from micron to s; no change made
+		'''
+		try:
+			self.wave = self.wave.to(wave_unit)
+			self.wave_unit = wave_unit
+		except:
+			if verbose==True: print('\nWarning! failed to convert wavelength unit from {} to {}; no change made'.format(self.wave.unit,wave_unit))			
+		return
+
+
+# convert flux units
+# NOT NEEDED, KEPT FOR BACKWARDS COMPATIBILITY
+	def toFluxUnit(self,flux_unit,verbose=ERROR_CHECKING):
+		'''
+		:Purpose: 
+			Converts flux and noise arrays to given flux units.
+		
+		:Required Inputs:
+			None
+		
+		:Optional Inputs:
+			None
+		
+		:Outputs:
+			None; Spectrum object is changed
+
+		:Example:
+		   >>> import splat
+		   >>> import astropy.units as u
+		   >>> sp = splat.Spectrum(file='somespectrum',wave_unit=u.Angstrom)
+		   >>> sp.flux.unit
+			erg / (cm2 micron s)
+		   >>> sp.toFluxUnit(u.Watt/u.m/u.m)
+		   >>> sp.flux.unit
+			W / m2
+		   >>> sp.toFluxUnit(u.erg/u.s)
+		   >>> sp.flux.unit
+			Warning! failed to convert flux unit from W / m2 to erg / s; no change made
+		'''
+		print('Warning: toFluxUnit() will be depracted in a future version')
+		self.fluxConvert(funit=flux_unit)
 		return
 
 
 # shift by pixel or wavelength
 	def shift(self,s):
 		'''
-		:Purpose: Shifts the wavelength scale by a given radial velocity. This routine changes the underlying Spectrum object.
+		:Purpose: 
+		Shifts the wavelength scale by either a pixel or wavelength offset. 
+		This routine changes the underlying Spectrum object.
 		
 		:Example:
 		   >>> import splat
 		   >>> import astropy.units as u
-		   >>> sp.rvShift(15*u.km/u.s)
+		   >>> sp.shift(0.1)
 		'''
+# wavelength shift		
 		if isUnit(s): 
-			s.to(self.wave.unit)
-			self.wave = self.wave.value+s
+			try: 
+				s.to(self.wave.unit)
+				self.wave = self.wave+s
+				return
+			except: pass
+			try: 
+				s.to(u.km/u.s)
+				self.wave = self.wave.value*((1.+(s/const.c).to(u.m/u.m)))*self.wave.unit
+				return
+			except: pass
+			print('Warning: could not transform quantity {} into a wavelength or RV shift; no change'.format(s))
 		else: 
-			self.wave = np.roll(self.wave,s)
-			if s > 0: self.wave[:s] = np.nan
-			if s < 0: self.wave[s:] = np.nan
+# pixel shift		
+			f = interp1d(np.arange(0,len(self.wave)),self.wave.value,bounds_error=False,fill_value='extrapolate')
+			self.wave = f(np.arange(0,len(self.wave))+s)*self.wave.unit
+			# if s > 0: self.wave[:s] = np.nan
+			# if s < 0: self.wave[s:] = np.nan
 		return
 
 
 # shift by radial velocity
+# NOTE: THIS IS NOW OBSELETE AND REPLACED BY .SHIFT()
 	def rvShift(self,rv):
 		'''
 		:Purpose: Shifts the wavelength scale by a given radial velocity. This routine changes the underlying Spectrum object.
@@ -1400,9 +1597,10 @@ class Spectrum(object):
 		   >>> import astropy.units as u
 		   >>> sp.rvShift(15*u.km/u.s)
 		'''
+		print('Warning: this function has been replaced by Spectrum.shift() and may be removed in future code versions')
 		if not isUnit(rv): rv=rv*(u.km/u.s)
 		rv.to(u.km/u.s)
-		self.wave = self.wave*((1.+(rv/const.c).to(u.m/u.m)))
+		self.wave = self.wave.value*((1.+(rv/const.c).to(u.m/u.m)))*self.wave.unit
 		return
 
 
@@ -1663,6 +1861,143 @@ class Spectrum(object):
 			self.scale(10.**(0.4*(apmag-mag)))
 		return
 
+
+# reddening
+	def redden(self, av=0.0, rv=3.1, normalize=False, verbose=ERROR_CHECKING,):
+		'''
+		:Purpose:
+
+			Redden a spectrum using astandard interstellar profile
+			from Cardelli, Clayton, and Mathis (1989 ApJ. 345, 245)
+
+		:Required Inputs:
+
+			None
+
+		:Optional Inputs:
+
+			:param av: Magnitude of reddening A_V (default = 0.)
+			:param rv: Normalized extinction parameter, R_V = A(V)/E(B-V) (default = 3.1
+			:param normalized: Set to True to normalize reddening function (default = False)
+
+		:Outputs:
+
+			None; spectral flux is changed
+
+		:Example:
+
+		   >>> import splat
+		   >>> sp = splat.Spectrum(10001)				   # read in a source
+		   >>> spr = splat.redden(sp,av=5.,rv=3.2)		  # redden to equivalent of AV=5
+
+		'''
+		w = (self.wave.to(u.micron)).value # micron assumed
+		x = 1./w
+		a = 0.574*(x**1.61)
+		b = -0.527*(x**1.61)
+		absfrac = 10.**(-0.4*av*(a+b/rv))
+		report = 'Reddened following Cardelli, Clayton, and Mathis (1989) using A_V = {} and R_V = {}'.format(av,rv)
+
+		if normalize == True:
+			absfrac = absfrac/np.median(absfrac)
+			report = report+' and normalized'
+
+		self.flux = np.array(self.flux.value)*np.array(absfrac)*self.flux.unit
+		self.noise = np.array(self.noise.value)*np.array(absfrac)*self.noise.unit
+		if verbose==True: print(report)
+
+		return
+
+
+	def applyPar(self,par={},verbose=ERROR_CHECKING,**kwargs):
+		'''
+		Purpose
+		-------
+
+		Applies secondary parameters `av`, `pshift`, `wshift`, `rv`, and `fscale` to Spectrum 
+		using the class built-in functions
+
+		Parameters
+		----------
+
+		par = {} : dict
+			Dictionary specifying the parameters to apply. The keys must conform to those in the
+			ucdmcmc.PARAMETERS variable or associated alternate keywords; all others will be ignored
+
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+
+		kwargs : dict
+			optional parameters for the built-in functions
+
+		Outputs
+		-------
+		
+		None: Spectrum object is modified
+
+		Example
+		-------
+
+		TBD
+
+		Dependencies
+		------------
+			
+		`isUnit()`
+		copy
+
+		'''	
+		for x in list(par.keys()):
+			tmp = checkName(x,PARAMETERS,verbose=False)
+			if isinstance(tmp,bool)==False:
+# redden
+				if tmp=='av': 
+					self.redden(av=par[x],**kwargs)
+#					if verbose==True: print('Spectrum reddened by AV = {} mag'.format(par[x]))
+# pixel shift
+				if tmp=='pshift':
+					self.shift(par[x])
+#					if verbose==True: print('Spectrum pixel shifted by {} pixels'.format(par[x]))
+# wave shift
+				if tmp=='wshift': 
+					wshift = par[x]
+					if isUnit(wshift) == False: wshift=wshift*DEFAULT_WAVE_UNIT
+					wshift.to(self.wave.unit)
+					self.shift(wshift)
+#					if verbose==True: print('Spectrum wavelength shifted by {}'.format(wshift))
+# rv shift
+				if tmp=='rv': 
+					rv = par[x]
+					if isUnit(rv) == False: rv=rv*u.km/u.s
+					rv.to(u.km/u.s)
+					self.shift(rv)
+#					if verbose==True: print('Spectrum RV shifted by {}'.format(rv))
+# rotational broadening
+				if tmp=='vsini': 
+					vsini = par[x]
+					if isUnit(vsini) == False: vsini=vsini*u.km/u.s
+					vsini.to(u.km/u.s)
+					self.broaden(vsini,method='rotation',**kwargs)
+#					if verbose==True: print('Spectrum broadened by rotational velocity {}'.format(vsini))
+# gaussian broadening
+				if tmp=='lsf': 
+					lsf = par[x]
+					if isUnit(lsf) == False: lsf=lsf*DEFAULT_WAVE_UNIT
+					lsf.to(self.wave.unit)
+					self.broaden(lsf,method='gaussian',**kwargs)
+#					if verbose==True: print('Spectrum gaussian broadened by line spread function {}'.format(slf))
+# flux offset
+				if tmp=='foff': 
+					med = np.nanmedian(self.flux.value)
+					self.flux = (self.flux.value+par[x]*med)*self.flux.unit	
+#					if verbose==True: print('Spectral flux offset by {}'.format(par[x]*med*self.flux.unit))
+
+# TO BE ADDED: TELLURIC ABSORPTION
+#		'telluric': {'type': float,'label': r'$\alpha$','fmt': '{:.2f}','step':0.01,'altname': ['tellabs','tell'],'default': 0.},
+
+		return
+
+
 # simple plot routine
 	def plot(self,outfile='',xscale='linear',yscale='linear',figsize=[8,5],fontscale=1,
 		xlabel='',ylabel='',ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
@@ -1724,51 +2059,6 @@ class Spectrum(object):
 		return
 
 
-# reddening
-	def redden(self, av=0.0, rv=3.1, normalize=False, verbose=ERROR_CHECKING,):
-		'''
-		:Purpose:
-
-			Redden a spectrum using astandard interstellar profile
-			from Cardelli, Clayton, and Mathis (1989 ApJ. 345, 245)
-
-		:Required Inputs:
-
-			None
-
-		:Optional Inputs:
-
-			:param av: Magnitude of reddening A_V (default = 0.)
-			:param rv: Normalized extinction parameter, R_V = A(V)/E(B-V) (default = 3.1
-			:param normalized: Set to True to normalize reddening function (default = False)
-
-		:Outputs:
-
-			None; spectral flux is changed
-
-		:Example:
-
-		   >>> import splat
-		   >>> sp = splat.Spectrum(10001)				   # read in a source
-		   >>> spr = splat.redden(sp,av=5.,rv=3.2)		  # redden to equivalent of AV=5
-
-		'''
-		w = (self.wave.to(u.micron)).value # micron assumed
-		x = 1./w
-		a = 0.574*(x**1.61)
-		b = -0.527*(x**1.61)
-		absfrac = 10.**(-0.4*av*(a+b/rv))
-		report = 'Reddened following Cardelli, Clayton, and Mathis (1989) using A_V = {} and R_V = {}'.format(av,rv)
-
-		if normalize == True:
-			absfrac = absfrac/np.median(absfrac)
-			report = report+' and normalized'
-
-		self.flux = np.array(self.flux.value)*np.array(absfrac)*self.flux.unit
-		self.noise = np.array(self.noise.value)*np.array(absfrac)*self.noise.unit
-		if verbose==True: print(report)
-
-		return
 
 
 # reset to original form
@@ -2130,8 +2420,7 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	Purpose
 	-------
 
-	Compares two flux vectors and corresponding uncertainty vector and returns a qualitative measure of agreement.
-	Note that is assumed the  function, computes chi square with optimal scale factor
+	Compares two flux vectors and corresponding uncertainty vector and returns a quantitative measure of agreement.
 
 	Parameters
 	----------
@@ -2191,6 +2480,161 @@ def compareSpec(f1,f2,unc,weights=[],stat='chi-square',verbose=ERROR_CHECKING):
 	return chi, scl, dof-1
 
 
+# CROSS-CORRELATES TWO SPECTRA TO MEASURE PIXEL, WAVELENGTH, OR RV OFFSET 
+def xcorr(flux1,flux2,wave=[],shftrng=[],resample=10,fitrng=[],output='pixel',file='',verbose=ERROR_CHECKING):
+	'''
+	
+	Purpose
+	-------
+
+	Cross correlates two flux vectors to measure pixel, wavelength or rv offset
+	This function is useful if you believe there is an offset in the x-axis between a spectrum and model
+
+	Parameters
+	----------
+
+	flux1 : np.array
+		An array of floats corresponding to the first spectrum; this quantity should not have units
+
+	flux2 : np.array
+		An array of floats corresponding to the second spectrum; this quantity should not have units
+		Note that f1 and f2 is assumed to be sampled onto the same pixel/wavelength scale
+
+	wave = [] : np.array
+		An optional array of floats corresponding to the wavelength grid; specify if you intend
+		to specify the fit range with the wavefitrng variable
+
+	shftrng = [] : int, float, list, or np.array
+		Specifies the range to explore pixel shifts; a single value is used to specify the ±range,
+		two values specifies the low and high limits (±10 by default)
+
+	resample = 10 : int or float
+		Linear oversampling factor; a shift array spanning -5 to 5 pixels with resample = 10 contains 
+		100 elements between -5 and 5 in steps of 0.1
+
+	fitrng = [] : np.array
+		Minimum and maximum wavelengths (if wave variable specified) or pixels (if not) over which 
+		cross-correlation is evaluated
+
+	output = 'pixel' : str
+		Specifies what type of shift should be output:
+			* 'pixel': pixel (array) shift
+			* 'wave': wavelength shift
+			* 'rv': radial velocity shift
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns the cross-correlation shift between f1 and f2; a positive number means that f1 is to the 
+	right of f2. The unit returned depends on the `output` variable (pixel, wavelength, or rv). 
+
+	Example
+	-------
+
+	TBD
+
+	Dependencies
+	------------
+		
+	numpy
+	scipy.interpolate.interp1d
+	matplotlib.pyplot
+
+	'''
+# check variables	
+	if len(flux1) != len(flux2): raise ValueError('Flux arrays must be same length; you have passed arrays of length {:.0f} and {:.0f}'.format(len(flux1),len(flux2)))
+	if len(wave)>0 and len(wave)!=len(flux1): raise ValueError('Wavelength and flux arrays must be same length; you have passed arrays of length {:.0f} for wave and {:.0f} for flux'.format(len(wave),len(flux1)))
+
+# set up integer shift array
+	if type(shftrng) in [int,float]: shftrng=[-shftrng*resample,shftrng*resample]
+	if len(shftrng)==0: shftrng=[int(-10*resample),int(10*resample)] # default
+	shifts = np.arange(shftrng[0],shftrng[1]+0.1)
+	shifts = [int(s) for s in shifts]
+
+# if no wavelength grid provided, assume pixel scale
+	if len(wave)==0: wave = np.arange(len(flux1))
+
+# de-unit everything
+	wv = copy.deepcopy(wave)
+	f1 = copy.deepcopy(flux1)
+	f2 = copy.deepcopy(flux2)
+	if isUnit(wv): wv=wv.value
+	if isUnit(wv[0]): wv=np.array([x.value for x in wv])
+	if isUnit(f1): f1=f1.value
+	if isUnit(f1[0]): f1=np.array([x.value for x in f1])
+	if isUnit(f2): f2=f2.value
+	if isUnit(f2[0]): f2=np.array([x.value for x in f2])
+
+# set up fitting range
+	diff = np.nanmax(wv)-np.nanmin(wv)
+	if len(fitrng)==0: 
+		fitrng=[np.nanmin(wv)+0.1*diff,np.nanmax(wv)-0.1*diff]
+	if np.nanmin(fitrng)<np.nanmin(wv): fitrng[0] = np.nanmin(wv)+0.1*diff
+	if np.nanmax(fitrng)>np.nanmax(wv): fitrng[1] = np.nanmax(wv)-0.1*diff
+# is next line redundant?
+#	if np.nanmax(fitrng)<np.nanmin(wv) or np.nanmin(fitrng)>np.nanmax(wv): raise ValueError('Fit range {:.2f} to {:.2f} is outside wavelength/pixel range {:.2f} to {:.2f}'.format(fitrng[0],fitrng[1],wv[0],wv[-1]))
+
+# resample, allowing for an irregularly space grid
+	if resample>1:
+		f = interp1d(np.arange(len(wv)),wv,bounds_error=False,fill_value='extrapolate')
+		xsamp = np.arange(0,len(wv),1/resample)
+		wavesamp = f(xsamp)
+		finterp1 = interp1d(wv,f1,bounds_error=False,fill_value=np.nan)
+		f1samp = finterp1(wavesamp)
+		finterp2 = interp1d(wv,f2,bounds_error=False,fill_value=np.nan)
+		f2samp = finterp2(wavesamp)
+	else:
+		wavesamp = copy.deepcopy(wv)
+		f1samp = copy.deepcopy(f1)
+		f2samp = copy.deepcopy(f2)
+
+# now compute cross correlation
+	stat = []
+	wfit = np.where(np.logical_and(wavesamp>=np.nanmin(fitrng),wavesamp<=np.nanmax(fitrng)))
+	if len(wfit[0])==0: raise ValueError('fit range {} to {} is outside wavelength range {} to {}'.format(fitrng[0],fitrng[1],np.nanmin(wv),np.nanmax(wv)))
+	for i,s in enumerate(shifts):
+		f2shft = np.roll(f2samp,s)
+		# if s < 0: cmpcomp[-s:] = np.nan
+		# else: cmpcomp[:s] = np.nan
+		stat.append(np.nansum(f2shft[wfit]*f1samp[wfit])/(np.nansum(f2shft[wfit])*np.nansum(f1samp[wfit])))
+
+# compute optimal quantity
+	if 'wav' in output.lower(): 
+		x = np.nanmedian(wavesamp[wfit]-np.roll(wavesamp[wfit],1))*np.array(shifts)
+		label = 'Wavelength'
+	elif 'rv' in output.lower(): 
+		x = ((const.c).to(u.km/u.s).value)*np.nanmedian(wavesamp[wfit]-np.roll(wavesamp[wfit],1))*np.array(shifts)/np.nanmedian(wavesamp[wfit])
+		label = 'RV'
+	else: 
+		x = np.array(shifts)/resample
+		label = 'Pixel'
+	bval = x[np.argmax(stat)]
+
+# if desired, display/save optimal value plot
+	if verbose==True:
+		print('{} shift = {}'.format(label,bval))
+# cross correlation plot
+		plt.clf()
+		yra = [np.nanmin(stat),np.nanmax(stat)+0.2*(np.nanmax(stat)-np.nanmin(stat))]
+		plt.plot(x,stat,'k-')
+		plt.plot([bval,bval],yra,'m--',lw=2,alpha=0.5,label='{} shift = {}'.format(label,bval))
+		plt.xlim([np.nanmin(x),np.nanmax(x)])
+		plt.ylim(yra)
+		plt.xlabel('{} shift'.format(label))
+		plt.ylabel('Cross-correlation')
+		plt.legend()
+		plt.tight_layout()
+		if file!='': plt.savefig(file)
+		else: plt.show()
+
+# return desired output
+	if 'rv' in output.lower(): bval=bval*u.km/u.s
+	return bval
+
+
 
 # RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
 # NOTE: THIS FUNCTION WILL BE MADE OBSELETE BY .TOWAVELENGTHS
@@ -2238,8 +2682,6 @@ def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flu
 	Example
 	-------
 
-STOPPED HERE
-
 	>>> import splat
 	>>> import ucdmcmc
 	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
@@ -2271,7 +2713,7 @@ STOPPED HERE
 #	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
 #	 else: wv0 = np.array(copy.deepcopy(wave0))
 
-	print('Warning: resample will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
+	print('Warning: resample() will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
 
 # prepare output wavelength grid
 	if isUnit(wave): wv=wave.to(sp.wave.unit).value
@@ -2357,7 +2799,7 @@ STOPPED HERE
 
 
 
-# GET ONT OF THE SAMPLE SPECTRA PROVIDED
+# GET ONE OF THE SAMPLE SPECTRA PROVIDED
 def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -2414,9 +2856,9 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 		raise ValueError('Cannot find sample file {} for instrument {}; check the path and file name'.format(sfile,instrument))
 # read in a return
 	sp = Spectrum(sfile,name=DEFINED_INSTRUMENTS[inst]['sample_name'],instrument=inst)
+	sp.bibcode = DEFINED_INSTRUMENTS[inst]['sample_bibcode']
 	if verbose==True: print('Reading in sample spectrum for instrument {} of source {}'.format(inst,sp.name))
 	return sp
-
 
 
 #######################################################
@@ -2424,6 +2866,8 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 ################   MODEL FUNCTIONS  ###################
 #######################################################
 #######################################################
+
+
 
 # INFORMATION ON A MODEL
 # UPDATE THIS WITH NEW MODEL STRUCTURE
@@ -2479,6 +2923,7 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 
 # check to see if there are files available
 	allfiles = glob.glob(os.path.join(MODEL_FOLDER,'{}*.h5'.format(MODEL_FILE_PREFIX)))
+	allfiles.extend(glob.glob(os.path.join(ALT_MODEL_FOLDER,'{}*.h5'.format(MODEL_FILE_PREFIX))))
 	if len(allfiles)==0:
 		print('No pre-calculated models currently available in installation')
 		return False
@@ -2532,7 +2977,7 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 			print('\taka {} models from {} (bibcode = {})'.format(DEFINED_SPECTRAL_MODELS[mdl]['name'],DEFINED_SPECTRAL_MODELS[mdl]['citation'],DEFINED_SPECTRAL_MODELS[mdl]['bibcode']))
 
 # success
-	return True
+	return
 
 
 # GENERATE A NEW WAVELENGTH ARRAY
@@ -3150,6 +3595,10 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 	mdl.parameters = dict(smdls.loc[0,:])
 	for x in [flux_name,'file']:
 		if x in list(mdl.parameters.keys()): del mdl.parameters[x]
+
+# apply secondary parameters if present
+	mdl.applyPar(par)
+
 	return mdl
 
 
@@ -3331,6 +3780,10 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,noise=np.array([np.nan]*len(wave))*DEFAULT_FLUX_UNIT,name=name)
 	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
 	mdl.parameters = par0
+
+# apply secondary parameters if present
+	mdl.applyPar(par0)
+
 	return mdl
 
 
@@ -3338,10 +3791,11 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 # WRAPPER TO GET A GRID OR INTERPOLATED MODEL
 # THIS WILL BE OBVIATED BY MODELSET CLASS
 def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
+# get the original model
 	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
 	except: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
-#	if 'scale' in par and rescale==True: sp.scale(par['scale'])
 	return sp
+
 
 
 #####################################################
@@ -3354,7 +3808,7 @@ def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 
 
 # FIT SPECTRUM TO A GRID OF MODELS
-def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parameters',absolute=False,
+def fitGrid(spc,models,altpar={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='parameters',absolute=False,
 	report=True,xscale='linear',yscale='linear',file_prefix='gridfit_',verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -3452,19 +3906,24 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
+# backwards compatability for constraint keyword
+	if len(list(constraints.keys()))>0:
+		print('Warning: constraints keyword will be deprecated in future version; use plimits instead')
+		plimits = copy.deepcopy(constraints)
+
 # constrain models if needed
 	mdls = copy.deepcopy(models)
-	for k in list(constraints.keys()):
+	for k in list(plimits.keys()):
 		if k in list(mdls.columns):
 			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
-				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
+				if verbose==True: print('Constaining {} to within {}'.format(k,plimits[k]))
 				for p in par:
-					if p not in constraints[k]: mdls = mdls[mdls[k]!=p]
+					if p not in plimits[k]: mdls = mdls[mdls[k]!=p]
 			else:
-				if verbose==True: print('Constaining {} to {}-{}'.format(k,constraints[k][0],constraints[k][1]))
-				mdls = mdls[mdls[k]>=constraints[k][0]]
-				mdls = mdls[mdls[k]<=constraints[k][1]]
+				if verbose==True: print('Constaining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
+				mdls = mdls[mdls[k]>=plimits[k][0]]
+				mdls = mdls[mdls[k]<=plimits[k][1]]
 				mdls.reset_index(inplace=True,drop=True)
 	
 # run through each grid point
@@ -3482,19 +3941,16 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 	mpar = dict(mdls.loc[np.argmin(mdls['chis']),:])
 	mpar['rchi'] = mpar['chis']/mpar['dof']
 	dpars = list(mdls.keys())
-	for x in [flux_name]:
+	for x in [flux_name,'file']:
 		if x in list(mpar.keys()): del mpar[x]
-	if verbose==True: 
-		print('Best fit model:')
-		for k in mpar:
-#			mpar[k] = mdls.loc[ibest,k]
-			print('\t{} = {}'.format(k,mpar[k]))
+	if verbose==True or report==True: 
+		print('\nBest parameters:')
+		for k in mpar: print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
 #	comp.scale(mpar['scale'])
 #	comp = splat.Spectrum(wave=wave,flux=np.array(mdls.loc[ibest,flux_name])*mdls.loc[ibest,'scale']*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
 #	dof = np.count_nonzero(~np.isnan(spscl.flux.value))-1
-	if verbose==True: print('\treduced chi2 = {}'.format(mpar['rchi']))
 	# sclstd = np.nanstd(diff.flux.value,ddof=1)/np.nanmax(spscl.flux.value)
 	# mpar['sclstd'] = sclstd
 
@@ -3515,7 +3971,7 @@ def fitGrid(spc,models,constraints={},flux_name=DEFAULT_FLUX_NAME,output='parame
 
 
 # MCMC FIT OF A SPECTRUM TO AN INTERPOLATED GRID OF MODELS
-def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='all',
+def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='all',
 	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,
 	quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,xscale='linear',yscale='linear',
 	file_prefix='mcmcfit_',verbose=ERROR_CHECKING):
@@ -3647,21 +4103,26 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
+# backwards compatability for constraint keyword
+	if len(list(constraints.keys()))>0:
+		print('Warning: constraints keyword will be deprecated in future version; use plimits instead')
+		plimits = copy.deepcopy(constraints)
+
 # constrain models if needed
 	mdls = copy.deepcopy(models)
-	for k in list(constraints.keys()):
+	for k in list(plimits.keys()):
 		if k in list(mdls.columns):
 			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
-				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
+				if verbose==True: print('Constaining {} to within {}'.format(k,plimits[k]))
 				for p in par:
-					if p not in constraints[k]: 
+					if p not in plimits[k]: 
 						mdls = mdls[mdls[k]!=p]
 						mdls.reset_index(inplace=True,drop=True)
 			else:
-				if verbose==True: print('Constaining {} to {}-{}'.format(k,constraints[k][0],constraints[k][1]))
-				mdls = mdls[mdls[k]>=constraints[k][0]]
-				mdls = mdls[mdls[k]<=constraints[k][1]]
+				if verbose==True: print('Constaining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
+				mdls = mdls[mdls[k]>=plimits[k][0]]
+				mdls = mdls[mdls[k]<=plimits[k][1]]
 				mdls.reset_index(inplace=True,drop=True)
 	mset = mdls.loc[0,'model']
 	mkys = list(mdls.keys())
@@ -3673,44 +4134,83 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 	for k in mkys: chk=chk and (k in list(p0.keys()))
 	if chk==False:
 		if verbose==True: print('Running initial grid fit')
-		p0 = fitGrid(spc,mdls,absolute=absolute,report=False,verbose=verbose)
+		p0 = fitGrid(spc,mdls,absolute=absolute,plimits=plimits,report=False,verbose=False)
 		if flux_name in list(p0.keys()): del p0[flux_name]
 		if verbose==True: print('\nGrid fit parameters: {}'.format(p0))
 
-# validate steps
-	if verbose==True: print('Fitting the following parameters:')
+# determine the model parameters that can be varied
 	mkysfit = copy.deepcopy(mkys)
+	for x in ['file','model','scale','dof','rchi']:
+		if x in mkysfit: mkysfit.remove(k)
 	for k in mkys:
 		vals = list(set(list(mdls[k])))
 		vals.sort()
 		if len(vals)<2: pstep[k] = 0.
 		else:
 			if k not in list(pstep.keys()):
-				if isinstance(mdls.loc[0,k],str): pstep[k] = -1.
+				if isinstance(vals[0],str): pstep[k] = -1.
 				else: pstep[k] = 0.5*np.nanmedian(np.absolute(np.array(vals)-np.roll(vals,1)))
 		if pstep[k] == 0: mkysfit.remove(k)
-		else:
-			if verbose==True: print('\t{}: initial={} step={}'.format(k,p0[k],pstep[k]))
+
+# add in alternate parameters if present
+	for k in ALT_PARAMETERS:
+		if k in list(p0.keys()):
+			if k not in list(pstep.keys()): pstep[k] = 0
+			if pstep[k] > 0: 
+				mkysfit.append(k)
 	nparam = len(mkysfit)
 
-# continuous and discrete variables
+# set defaults for required model parameters
+	for k in mkysfit: 
+		if k not in list(p0.keys()):
+			if k in list(mdls.columns): p0[k] = DEFINED_SPECTRAL_MODELS[mset]['default'][k]
+			elif k in list(PARAMETERS.keys()): p0[k] = PARAMETERS[k]['default']
+			else: 
+				if verbose==True: print('Warning: dropping parameter {} as no default value provided'.format(k))
+				mkysfit.remove(k)
+				nparam = len(mkysfit)
+
+# set limits for fitting parameters
+	for k in mkysfit: 
+		if k not in list(plimits.keys()):
+			if k in list(mdls.columns): 
+				vals = list(set(list(mdls[k])))
+				vals.sort()
+				if isinstance(vals,str)==False: plimits[k] = [vals[0],vals[-1]]
+				else: plimits[k] = []
+			elif k in list(PARAMETERS.keys()): plimits[k] = PARAMETERS[k]['limits']
+			else: plimits[k] = [p0[k],p0[k]]
+
+# organize into continuous and discrete variables
 	pfitc,pfitd = {},{}
+	if verbose==True: print('Fitting the following parameters:')
 	for k in mkysfit: 
 		if k in list(p0.keys()):
-			if isinstance(mdls.loc[0,k],str): pfitd[k] = p0[k]
-			else: pfitc[k] = p0[k]
-		else: 
-			default = DEFINED_SPECTRAL_MODELS[mset]['default'][k]
-#			default = splat.SPECTRAL_MODELS[mset]['default'][k]
-			if isinstance(default,str): pfitd[k] = default
-			else: pfitc[k] = default
+			if isinstance(p0[k],str)==True: 
+				pfitd[k] = p0[k]
+				if verbose==True: print('\t{}: initial={} (discrete)'.format(k,p0[k]))
+			else: 
+				pfitc[k] = p0[k]
+				if verbose==True: print('\t{}: initial={} step={} min={} max={}'.format(k,p0[k],pstep[k],plimits[k][0],plimits[k][1]))
+# 		else: 
+# 			if k in list(PARAMETERS.keys()):
+
+# 				if PARAMETERS[k]['type'] == str: p
+# 				else: pfitc[k] = p0[k]
+# 			elif k in list(mdls.columns):
+# 				if isinstance(mdls.loc[0,k],str): pfitd[k] = p0[k]
+# 				else: pfitc[k] = p0[k]
+# 			else: 
+# 			default = DEFINED_SPECTRAL_MODELS[mset]['default'][k]
+# #			default = splat.SPECTRAL_MODELS[mset]['default'][k]
+# 			if isinstance(default,str): pfitd[k] = default
+# 			else: pfitc[k] = default
 
 # some plotting set up
 	ylabelpre = 'Scaled '
 	if absolute==True: ylabelpre='Absolute '
 
 # initialize MCMC
-# SOMETHING IS WRONG HERE
 	cmdl = getModel(mdls,p0,spscl.wave,scale=False,verbose=verbose)
 	chi,scl,dof = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 	dof = dof-nparam
@@ -3725,15 +4225,17 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 	for i in tqdm(range(nstep)):
 		pnew = copy.deepcopy(pvals[-1])
 # continuous variables		
+# constrain to be within specified limits
 		for k in list(pfitc.keys()): 
 			pnew[k] = np.random.normal(pvals[-1][k],pstep[k])
-			pnew[k] = np.nanmin([pnew[k],np.nanmax(mdls[k])])
-			pnew[k] = np.nanmax([pnew[k],np.nanmin(mdls[k])])
+			pnew[k] = np.nanmin([pnew[k],np.nanmax(plimits[k])])
+			pnew[k] = np.nanmax([pnew[k],np.nanmin(plimits[k])])
 # discrete variables
 		for k in list(pfitd.keys()): 
 			vals = list(set(list(mdls[k])))
 			pnew[k] = np.random.choice(vals)
-		pnew = pnew | pfitd
+# do we need this next line?			
+#		pnew = pnew | pfitd
 		try:
 			cmdl = getModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
 			if verbose==True: print(i,pnew)
@@ -3781,7 +4283,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		if iterim>0 and i>0 and np.mod(i,iterim)==0 and report==True:
 # save parameters
 			dpfit = pandas.DataFrame()
-			for k in mkys: 
+			for k in list(pvals[0].keys()): 
 				dpfit[k] = [p[k] for p in pvals]
 			dpfit['chis'] = chis
 			dpfit['dof'] = [dof]*len(dpfit)
@@ -3807,7 +4309,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 # plot cornerplot
 			plotpars = copy.deepcopy(mkysfit)
 			for k in plotpars:
-				if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
+				if isinstance(dpfit.loc[0,k],str): plotpars.remove(k)
 			if absolute==True: plotpars.append('radius')
 			pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
@@ -3823,7 +4325,7 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 # remove burn in
 	pvalsb = pvals[int(burn*nstep):]
 	dpfit = pandas.DataFrame()
-	for k in mkys: 
+	for k in list(pvalsb[0].keys()): 
 		dpfit[k] = [p[k] for p in pvalsb]
 	dpfit['chis'] = chis[int(burn*nstep):]
 	dpfit['dof'] = [dof]*len(dpfit)
@@ -3833,9 +4335,11 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 # best fit parameters
 	pbest = dict(dpfit.loc[np.argmin(dpfit['chis']),:])
 	pvalsb[np.argmin(chis[int(burn*nstep):])]
-	for x in [flux_name]:
+	for x in [flux_name,'file']:
 		if x in list(pbest.keys()): del pbest[x]
-	if verbose==True: print('Best parameters: {}'.format(pbest))
+	if verbose==True or report==True: 
+		print('\nBest parameters:')
+		for x in list(pbest.keys()): print('\t{}: {}'.format(x,pbest[x]))
 	cmdl = getModel(mdls,pbest,spscl.wave,verbose=verbose)
 	if 'scale' not in list(pbest.keys()): cmdl.scale(scales[np.argmin(chis)])
 
@@ -3863,13 +4367,13 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 		outfile = file_prefix+'_compare.pdf'
 		if verbose==True: print('Plotting best fit comparison to {}'.format(outfile))
 		if nsample<=0: 
-			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=(verbose or report))
 		else:
-			plotCompareSample(spscl,mdls,dpfit,nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
+			plotCompareSample(spscl,mdls,dpfit,nsample=nsample,outfile=outfile,clabel=label,absolute=absolute,verbose=(verbose or report))
 # plot cornerplot
 		plotpars = copy.deepcopy(mkysfit)
 		for k in plotpars:
-			if isinstance(mdls.loc[0,k],str): plotpars.remove(k)
+			if isinstance(dpfit.loc[0,k],str): plotpars.remove(k)
 		if absolute==True: plotpars.append('radius')
 		pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
@@ -3895,12 +4399,18 @@ def fitMCMC(spc,models,p0={},constraints={},flux_name=DEFAULT_FLUX_NAME,output='
 
 # emcee FIT OF A SPECTRUM TO AN INTERPOLATED GRID OF MODELS
 # PLACEHOLDER
-def fitemcee(spc,models,p0={},constraints={},output='all',
-	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,
+def fitEMCEE(spc,models,p0={},plimits={},output='all',
+	pstep=DEFAULT_MCMC_STEPS,nstep=100,iterim=50,method='chidiff',threshhold=0.5,burn=0.25,propose_scale=1.1,
 	quantscale=[0.25,0.5,0.75],nsample=0,absolute=False,report=True,xscale='linear',yscale='linear',
 	file_prefix='emceefit_',verbose=ERROR_CHECKING):
 
-	pass
+# confirm presence of emcee
+	try:
+		import emcee
+	except:
+		raise NameError('\nYou must install emcee to run this program; see http://dan.iel.fm/emcee/current/')
+
+
 	return
 
 ####################################################
@@ -3968,8 +4478,11 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 
 # PLOT COMPARISON OF SPECTRUM AND BEST MCMC FIT, ALONG WITH SAMPLING OF CHAIN
 def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
-	clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,xscale='linear',yscale='linear',
-	figsize=[8,5],height_ratio=[5,1],fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+	clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,plot_scale=1.,
+	residual_plot_scale=-1.,xscale='linear',yscale='linear',figsize=[8,5],height_ratio=[5,1],
+	drawalpha=0.3,fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+# parameter check
+	if residual_plot_scale<0: residual_plot_scale=plot_scale
 # set up
 	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
@@ -3995,6 +4508,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	chainsub.reset_index(inplace=True)
 	nsamp = np.nanmin([nsample,len(chainsub)])
 	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in np.random.randint(0,len(chainsub)-1,nsamp)]
+	fluxes = [f*scale for f in fluxes]
 
 # plot
 	plt.clf()
@@ -4014,7 +4528,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 			# stdflx = stdflx*scale 
 		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=0.2)
 	else:
-		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=1/nsamp)
+		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=drawalpha)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
@@ -4022,7 +4536,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = np.nanmax(cspec.flux.value)
 	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
-	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+	if ylim==None: ax1.set_ylim([x*scl*plot_scale for x in [-0.1,1.3]])
 	else: ax1.set_ylim(ylim)
 	ax1.set_xscale(xscale)
 	ax1.set_yscale(yscale)
@@ -4038,7 +4552,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
 	scl = np.nanquantile(diff,[0.02,0.98])
-	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
+	ax2.set_ylim([scl[0]-residual_plot_scale*(scl[1]-scl[0]),scl[1]+residual_plot_scale*(scl[1]-scl[0])])
 	ax2.set_xlim(xlim)
 	ax2.set_xscale(xscale)
 	ax2.set_yscale(yscale)
@@ -4118,7 +4632,7 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 	plt.clf()
 	fig = corner.corner(dpplot,quantiles=[0.16, 0.5, 0.84], labels=plabels, show_titles=True, weights=weights, \
 						labelpad=0, title_kwargs={"fontsize": 14},label_kwargs={'fontsize': 14}, smooth=1,truths=truths, \
-						truth_color='m',verbose=verbose)
+						truth_color='m',hist2d_kwargs={'levels': [0.25,0.5,0.75]},verbose=verbose)
 	plt.tight_layout()
 	if outfile!='': fig.savefig(outfile)
 	if verbose==True: plt.show()

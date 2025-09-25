@@ -49,7 +49,7 @@ See https://github.com/aburgasser/splat for additional instructions
 
 ## Models
 
-`ucdmcmc` comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/
+`ucdmcmc` comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/. These should be placed in the folder `.ucdmcmc_models` in your home directory (i.e., `/home/adam/.ucdmcmc.models`). If it doesn't already exist, this directory will be created on the first call to `ucdmcmcm`. In addition, models that exist on this website and not present in this folder will be downloaded directly when `getModelSet()`` is called. You can also generate your own set of models using the `generateModels()` function (see note above).
 
 ## Spectra
 
@@ -62,16 +62,46 @@ See https://github.com/aburgasser/splat for additional instructions
 * JWST-MIRI-LRS: TBD 
 * JWST-NIRSPEC-MIRI: Combined NIRSpec/PRISM and MIRI/LRS of SDSS J1624+0029 from Beiler et al. (2024) https://ui.adsabs.harvard.edu/abs/2024arXiv240708518B/abstract
 
+User spectra can be read in using `ucdmcmc.Spectrum("filename")`. Files can be `.fits`, `.csv`, `.txt` (space-delimited), or `.tsv` (tab-delimited), and should have wavelength, flux, and uncertainty arrays. You can also read in these files separately and create a Spectrum object using the call `ucdmcmc.Spectrum(wave=[wave array,flux=[flux array],noise=[uncertainty array])`. See the docstring for `ucdmcmc.Spectrum` for further details.
+
 ## Usage
 
 [TBD examples]
 
-## Citing the code
+## Opacities
 
 [TBD]
 
+## Citing the code
+
+If you use this code in your research, publications, or presentatinos, please include the following citation:
+
+	Adam Burgasser. (2025). aburgasser/ucdmcmc (vXXX). Zenodo. https://doi.org/10.5281/zenodo.16923762
+
+or in bibtex:
+
+	@software{adam_burgasser_2025_16921711,
+		author = {Adam Burgasser},
+		doi = {10.5281/zenodo.16921711},
+		month = aug,
+		publisher = {Zenodo},
+		title = {aburgasser/ucdmcmc},
+		url = {https://doi.org/10.5281/zenodo.16921711},
+		version = {vXXX},
+		year = 2025,
+		bdsk-url-1 = {https://doi.org/10.5281/zenodo.16921711}}
+
+ where (vXXX) corresponds to the version used.  
+
 `ucdmcmc` and its antecedents has been used in the following publications:
 
-* Burgasser et al. (2024): https://ui.adsabs.harvard.edu/abs/2024ApJ...962..177B/abstract
-* Lueber & Burgasser (2025): https://ui.adsabs.harvard.edu/abs/2025ApJ...988...31L/abstract
+* Burgasser et al. (2024, ApJ 962, 177): https://ui.adsabs.harvard.edu/abs/2024ApJ...962..177B/abstract
+* Burgasser et al. (2025, ApJ 982, 79): https://ui.adsabs.harvard.edu/abs/2025ApJ...982...79B/abstract
+* Lueber & Burgasser (2025, ApJ 988, 31): https://ui.adsabs.harvard.edu/abs/2025ApJ...988...31L/abstract
+* Morrissey et al. (2025, AJ, submitted)
+* Burgasser et al. (2025, Science, submitted)
+
+Please let me know if you make use of the code so we can include your publication in the list above!
+
+
 

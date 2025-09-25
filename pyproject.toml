@@ -33,6 +33,7 @@ dependencies = [
     "requests",
     "scipy",
     "spectres",
+    "splat",
     "statsmodels",
     "tqdm",
     "importlib_resources; python_version < '3.7'",
