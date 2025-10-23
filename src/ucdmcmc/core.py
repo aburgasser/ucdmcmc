@@ -91,7 +91,7 @@ import warnings
 
 
 # reference parameters
-VERSION = '2025.09.24'
+VERSION = '2025.10.23'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
@@ -156,13 +156,18 @@ for x in list(PARAMETERS.keys()): DEFAULT_MCMC_STEPS[x] = PARAMETERS[x]['step']
 # instruments
 DEFINED_INSTRUMENTS = {
 	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
-	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
-	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
 	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
 	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024arXiv240708518B'},
 #	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': '','sample_bibcode': ''},
+#	'KECK-LRIS-RED': {'instrument_name': 'Keck LRIS Red', 'altname': ['LRIS','LRIS-RED'], 'wave_range': [0.55,1.0]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': ''},
+#	'KECK-LRIS-BLUE': {'instrument_name': 'Keck LRIS Blue', 'altname': ['LRIS-BLUE'], 'wave_range': [0.3,0.6]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': ''},
+	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
+	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
+#	'SHANE-KAST-BLUE': {'instrument_name': 'Shane Kast Red', 'altname': ['KAST','KAST-RED'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
+#	'SHANE-KAST-RED': {'instrument_name': 'Shane Kast Blue', 'altname': ['KAST-BLUE'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
+	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': [''], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': ''},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -765,6 +770,13 @@ class Spectrum(object):
 		if len(self.wave)==0 and len(self.flux)==0:
 			if verbose==True: print('Warning: Creating an empty Spectrum object')
 			return
+
+# make sure wave, flux, and noise arrays have same lengths
+		if len(self.wave) != len(self.flux):
+			raise ValueError('Cannot creat Spectrum object; wavelength array len {:.0f} differs from flux array len {:.0f}'.format(len(self.wave),len(self.flux)))
+		if len(self.noise) != len(self.flux):
+			if len(self.noise)==0: self.noise=np.array([np.nan]*len(self.flux))
+			else: raise ValueError('Cannot creat Spectrum object; noise array len {:.0f} differs from flux array len {:.0f}'.format(len(self.wave),len(self.flux)))
 
 # process spectral data
 # convert to numpy arrays
@@ -1863,7 +1875,7 @@ class Spectrum(object):
 
 
 # reddening
-	def redden(self, av=0.0, rv=3.1, normalize=False, verbose=ERROR_CHECKING,):
+	def redden(self, av=0.0, rv=3.1, normalize=False, verbose=False,):
 		'''
 		:Purpose:
 
@@ -2599,7 +2611,7 @@ def xcorr(flux1,flux2,wave=[],shftrng=[],resample=10,fitrng=[],output='pixel',fi
 		f2shft = np.roll(f2samp,s)
 		# if s < 0: cmpcomp[-s:] = np.nan
 		# else: cmpcomp[:s] = np.nan
-		stat.append(np.nansum(f2shft[wfit]*f1samp[wfit])/(np.nansum(f2shft[wfit])*np.nansum(f1samp[wfit])))
+		stat.append(np.nansum((f2shft[wfit]-np.nanmedian(f2shft[wfit]))*(f1samp[wfit]-np.nanmedian(f1samp[wfit])))/(np.nansum(f2shft[wfit])*np.nansum(f1samp[wfit])))
 
 # compute optimal quantity
 	if 'wav' in output.lower(): 
@@ -2635,167 +2647,6 @@ def xcorr(flux1,flux2,wave=[],shftrng=[],resample=10,fitrng=[],output='pixel',fi
 	return bval
 
 
-
-# RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
-# NOTE: THIS FUNCTION WILL BE MADE OBSELETE BY .TOWAVELENGTHS
-def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
-	'''
-	
-	Purpose
-	-------
-
-	Resamples a spectrum onto a wavelength grid with optional smoothing
-
-	Parameters
-	----------
-
-	sp : splat.Spectrum class
-		splat Spectrum object to resample onto wave grid
-
-	wave : np.ndarray or list
-		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
-		otherwise assumed to be in the units of `wave_unit`
-
-	method = 'integrate' : str
-		Method by which spectrum is resampled onto new wavelength grid; options are:
-		* 'integrate': flux in integrated across wach wavelength grid point (also 'int')
-		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
-		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
-		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
-		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
-
-	default_noise = np.nan : int or float
-		default noise value if not provided in noise array
-
-	smooth = 1 : int
-		pixel scale over which to do additional (boxcar) smoothing
-
-	verbose = ERROR_CHECKING : bool
-		Set to True to return verbose output
-
-	Outputs
-	-------
-	
-	Returns a spectrum object in which the orginal spectrum has been resampled onto the given wave grid, 
-	with additional smoothing if noted. 
-
-	Example
-	-------
-
-	>>> import splat
-	>>> import ucdmcmc
-	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
-	>>> sp2.toWavelengths(sp1.wave)
-	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
-	(16279.746979311662, 0.9281232247150684, 561)
-
-	Dependencies
-	------------
-		
-	`isUnit()`
-	splat
-	
-
-	'''
-# prepare input flux
-#	 if isUnit(flux): flx0=flux.to(flux_unit).value
-#	 else: flx0 = np.array(copy.deepcopy(flux))
-
-# # prepare input uncertainty
-#	 if isUnit(noise): unc0=noise.to(flux_unit).value
-#	 else: unc0 = np.array(copy.deepcopy(noise))
-#	 if len(noise)==0: 
-#		 if isUnit(default_noise): dns=default_noise.to(flux_unit).value
-#		 else: dns = np.array(copy.deepcopy(default_noise))
-#		 unc0 = np.array([dns]*len(flx0))
-
-# # prepare input wavelength grid
-#	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
-#	 else: wv0 = np.array(copy.deepcopy(wave0))
-
-	print('Warning: resample() will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
-
-# prepare output wavelength grid
-	if isUnit(wave): wv=wave.to(sp.wave.unit).value
-	else: wv = np.array(copy.deepcopy(wave))
-	wshift = 2.*np.absolute(np.nanmedian(np.roll(wv,-1)-wv))
-
-
-# trim if necessary
-#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),np.nanmin(wv),np.nanmax(wv))
-	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
-#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),len(sp.wave))
-	# wv0 = wv0[wtr]
-	# flx0 = flx0[wtr]
-	# unc0 = unc0[wtr]
-	# wtr = np.where(np.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
-	# if len(wv0[wtr])==0:
-	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(np.nanmin(wv0),np.nanmax(wv0),np.nanmin(wv),np.nanmax(wv)))
-
-# prepare spectrum object
-	# spc = copy.deepcopy(sp)
-	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
-
-# run interpolation
-	flx = [np.nan]*len(wv)
-	unc = [np.nan]*len(wv)
-	smind = int(smooth)
-	for i,w in enumerate(wv):
-		if i<smind: wrng = [w-(wv[smind]-w),wv[smind]]
-		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
-		else: wrng = [wv[i-smind],wv[i+smind]]
-		wsel = np.where(np.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
-		cnt = len(sp.wave.value[wsel])
-# expand range
-		if cnt <= 1:
-			wsel = np.where(np.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
-			cnt = len(sp.wave.value[wsel])
-		if cnt >= 1:
-			flx0s = sp.flux.value[wsel]
-			unc0s = sp.noise.value[wsel]
-			wv0s = sp.wave.value[wsel]
-			wn = np.where(~np.isnan(flx0s))
-			if len(flx0s[wn])>0:
-				if method.lower() in ['mean','mn','average','ave']:
-					flx[i] = np.nanmean(flx0s[wn])
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = np.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
-				elif method.lower() in ['weighted mean','wmn','weighted']:
-					wts = 1./unc0s[wn]**2
-					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
-					flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-				elif method.lower() in ['integrate','int']:
-					wts = np.ones(len(wv0s[wn]))
-					if cnt > 1: 
-						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
-					else:
-						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-				elif method.lower() in ['weighted integrate','wint']:
-					wts = 1./unc0s[wn]**2
-					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
-					if cnt > 1: 
-						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
-					else:
-						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-					# unc[i] = (np.trapz(np.ones(len(wv0[wn])),wv0[wn])/np.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
-					# flx[i] = np.trapz(flx0[wn],wv0[wn])/np.trapz(np.ones(len(wv0[wn])),wv0[wn])
-# median by default
-				else:
-					flx[i] = np.nanmedian(flx0s[wn])
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = flx[i]/np.nanmedian(flx0s[wn]/unc0s[wn])
-		# else:
-		#	 print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
-#					unc[i] = np.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
-
-# return flux
-	# return flx*flux_unit
-
-# return Spectrum object
-	return Spectrum(wave=np.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
 
 
 
@@ -3077,6 +2928,7 @@ def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=ERROR
 	'''
 # check if the file already exists in sample	
 	files = glob.glob(os.path.join(MODEL_FOLDER,'{}{}.csv'.format(prefix,inp)))
+	if len(files)==0: files = glob.glob(os.path.join(ALT_MODEL_FOLDER,'{}{}.csv'.format(prefix,inp)))
 	if len(files)>0:
 		if verbose==True: print('Reading in wavelength array for {} instrument'.format(inp))
 		file = files[0]
@@ -3230,7 +3082,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 # GENERATE A MODEL SET
 # note that this routine requires the splat.model package
 def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instrument='RAW',
-	method='integrate',doresample=True,smooth=2,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+	method='integrate',doresample=True,smooth=0,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -3435,9 +3287,9 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 # read in the models trying a few different methods
 	pars = []
 	step = np.ceil(len(modelpars)/10.)
-#	for i in tqdm(range(len(dp))):
+#	for i in tqdm(range(len(modelpars))):
 	for i in range(len(modelpars)):
-		if i!=0 and np.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
+		if np.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
 		par = dict(modelpars.loc[i,:])
 
 # read in with splat.Spectrum
@@ -3466,9 +3318,11 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 
 # resample if desired
 		if doresample==True:
-			mdl = splat.Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
-			mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
-			wv,flx = mdlsm.wave.value,mdlsm.flux.value
+			mdl = Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
+			mdl.toWavelengths(wave0)
+			if smooth > 1: mdl.smooth(smooth)
+#			mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
+			wv,flx = mdl.wave.value,mdl.flux.value
 		else:
 			if i==0: wave0 = copy.deepcopy(wv)
 
@@ -3929,7 +3783,12 @@ def fitGrid(spc,models,altpar={},plimits={},constraints={},flux_name=DEFAULT_FLU
 # run through each grid point
 	for x in ['scale','chis','radius','dof']: mdls[x] = [np.nan]*len(mdls)
 	for jjj in range(len(mdls)):
-		chi,scl,dof = compareSpec(spscl.flux.value,np.array(mdls.loc[jjj,flux_name]),spscl.noise.value,verbose=verbose)
+		if len(altpar)>0:
+			mdln = Spectrum(wave=spscl.wave,flux=np.array(mdls.loc[jjj,flux_name])*spscl.flux.unit)
+			mdln.applyPar(altpar)
+			mdlind = mdln.flux.value
+		else: mdlind = np.array(mdls.loc[jjj,flux_name])
+		chi,scl,dof = compareSpec(spscl.flux.value,mdlind,spscl.noise.value,verbose=verbose)
 		mdls.loc[jjj,'chis'] = chi
 		mdls.loc[jjj,'scale'] = scl
 		mdls.loc[jjj,'dof'] = dof
@@ -3947,6 +3806,9 @@ def fitGrid(spc,models,altpar={},plimits={},constraints={},flux_name=DEFAULT_FLU
 		print('\nBest parameters:')
 		for k in mpar: print('\t{} = {}'.format(k,mpar[k]))
 	comp = getGridModel(mdls,mpar,spscl.wave,verbose=verbose)
+	if len(altpar)>0: 
+		comp.applyPar(altpar)
+		mpar = mpar | altpar
 #	comp.scale(mpar['scale'])
 #	comp = splat.Spectrum(wave=wave,flux=np.array(mdls.loc[ibest,flux_name])*mdls.loc[ibest,'scale']*spscl.flux.unit)
 	diff = spscl.flux.value-comp.flux.value
@@ -4637,3 +4499,179 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 	if outfile!='': fig.savefig(outfile)
 	if verbose==True: plt.show()
 	return
+
+
+
+
+
+
+
+####################################################
+####################################################
+####################################################
+################# EXPIRED FUNCTIONS ################ 
+####################################################
+####################################################
+####################################################
+
+# RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
+# NOTE: THIS FUNCTION WILL BE MADE OBSELETE BY .TOWAVELENGTHS
+def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
+	'''
+	
+	Purpose
+	-------
+
+	Resamples a spectrum onto a wavelength grid with optional smoothing
+
+	Parameters
+	----------
+
+	sp : splat.Spectrum class
+		splat Spectrum object to resample onto wave grid
+
+	wave : np.ndarray or list
+		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
+		otherwise assumed to be in the units of `wave_unit`
+
+	method = 'integrate' : str
+		Method by which spectrum is resampled onto new wavelength grid; options are:
+		* 'integrate': flux in integrated across wach wavelength grid point (also 'int')
+		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
+		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
+		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
+		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
+
+	default_noise = np.nan : int or float
+		default noise value if not provided in noise array
+
+	smooth = 1 : int
+		pixel scale over which to do additional (boxcar) smoothing
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns a spectrum object in which the orginal spectrum has been resampled onto the given wave grid, 
+	with additional smoothing if noted. 
+
+	Example
+	-------
+
+	>>> import splat
+	>>> import ucdmcmc
+	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
+	>>> sp2.toWavelengths(sp1.wave)
+	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
+	(16279.746979311662, 0.9281232247150684, 561)
+
+	Dependencies
+	------------
+		
+	`isUnit()`
+	splat
+	
+
+	'''
+# prepare input flux
+#	 if isUnit(flux): flx0=flux.to(flux_unit).value
+#	 else: flx0 = np.array(copy.deepcopy(flux))
+
+# # prepare input uncertainty
+#	 if isUnit(noise): unc0=noise.to(flux_unit).value
+#	 else: unc0 = np.array(copy.deepcopy(noise))
+#	 if len(noise)==0: 
+#		 if isUnit(default_noise): dns=default_noise.to(flux_unit).value
+#		 else: dns = np.array(copy.deepcopy(default_noise))
+#		 unc0 = np.array([dns]*len(flx0))
+
+# # prepare input wavelength grid
+#	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
+#	 else: wv0 = np.array(copy.deepcopy(wave0))
+
+	print('Warning: resample() will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
+
+# prepare output wavelength grid
+	if isUnit(wave): wv=wave.to(sp.wave.unit).value
+	else: wv = np.array(copy.deepcopy(wave))
+	wshift = 2.*np.absolute(np.nanmedian(np.roll(wv,-1)-wv))
+
+
+# trim if necessary
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),np.nanmin(wv),np.nanmax(wv))
+	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),len(sp.wave))
+	# wv0 = wv0[wtr]
+	# flx0 = flx0[wtr]
+	# unc0 = unc0[wtr]
+	# wtr = np.where(np.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
+	# if len(wv0[wtr])==0:
+	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(np.nanmin(wv0),np.nanmax(wv0),np.nanmin(wv),np.nanmax(wv)))
+
+# prepare spectrum object
+	# spc = copy.deepcopy(sp)
+	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+
+# run interpolation
+	flx = [np.nan]*len(wv)
+	unc = [np.nan]*len(wv)
+	smind = int(smooth)
+	for i,w in enumerate(wv):
+		if i<smind: wrng = [w-(wv[smind]-w),wv[smind]]
+		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
+		else: wrng = [wv[i-smind],wv[i+smind]]
+		wsel = np.where(np.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
+		cnt = len(sp.wave.value[wsel])
+# expand range
+		if cnt <= 1:
+			wsel = np.where(np.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
+			cnt = len(sp.wave.value[wsel])
+		if cnt >= 1:
+			flx0s = sp.flux.value[wsel]
+			unc0s = sp.noise.value[wsel]
+			wv0s = sp.wave.value[wsel]
+			wn = np.where(~np.isnan(flx0s))
+			if len(flx0s[wn])>0:
+				if method.lower() in ['mean','mn','average','ave']:
+					flx[i] = np.nanmean(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = np.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
+				elif method.lower() in ['weighted mean','wmn','weighted']:
+					wts = 1./unc0s[wn]**2
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
+					flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+				elif method.lower() in ['integrate','int']:
+					wts = np.ones(len(wv0s[wn]))
+					if cnt > 1: 
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
+					else:
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+				elif method.lower() in ['weighted integrate','wint']:
+					wts = 1./unc0s[wn]**2
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
+					if cnt > 1: 
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
+					else:
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+					# unc[i] = (np.trapz(np.ones(len(wv0[wn])),wv0[wn])/np.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
+					# flx[i] = np.trapz(flx0[wn],wv0[wn])/np.trapz(np.ones(len(wv0[wn])),wv0[wn])
+# median by default
+				else:
+					flx[i] = np.nanmedian(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = flx[i]/np.nanmedian(flx0s[wn]/unc0s[wn])
+		# else:
+		#	 print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
+#					unc[i] = np.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
+
+# return flux
+	# return flx*flux_unit
+
+# return Spectrum object
+	return Spectrum(wave=np.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
+
