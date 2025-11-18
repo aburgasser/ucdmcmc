@@ -49,7 +49,7 @@ See https://github.com/aburgasser/splat for additional instructions
 
 ## Models
 
-`ucdmcmc` comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/. These should be placed in the folder `.ucdmcmc_models` in your home directory (i.e., `/home/adam/.ucdmcmc.models`). If it doesn't already exist, this directory will be created on the first call to `ucdmcmcm`. In addition, models that exist on this website and not present in this folder will be downloaded directly when `getModelSet()`` is called. You can also generate your own set of models using the `generateModels()` function (see note above).
+`ucdmcmc` comes with a starter set of models that play nicely with the code. An extended set can be downloaded from https://spexarchive.coolstarlab.ucsd.edu/ucdmcmc/. These should be placed in the folder `.ucdmcmc_models` in your home directory (i.e., `/home/adam/.ucdmcmc_models`). If it doesn't already exist, this directory will be created on the first call to `ucdmcmcm`. In addition, models that exist on this website and not present in this folder will be downloaded directly when `getModelSet()`` is called. You can also generate your own set of models using the `generateModels()` function (see note above).
 
 ## Spectra
 
