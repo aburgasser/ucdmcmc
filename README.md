@@ -98,8 +98,8 @@ or in bibtex:
 * Burgasser et al. (2024, ApJ 962, 177): https://ui.adsabs.harvard.edu/abs/2024ApJ...962..177B/abstract
 * Burgasser et al. (2025, ApJ 982, 79): https://ui.adsabs.harvard.edu/abs/2025ApJ...982...79B/abstract
 * Lueber & Burgasser (2025, ApJ 988, 31): https://ui.adsabs.harvard.edu/abs/2025ApJ...988...31L/abstract
-* Morrissey et al. (2025, AJ, submitted)
-* Burgasser et al. (2025, Science, submitted)
+* Burgasser et al. (2025, Science, 390, 697): https://ui.adsabs.harvard.edu/abs/2025Sci...390..697B/abstract
+* Morrissey et al. (2026, AJ, in press): https://ui.adsabs.harvard.edu/abs/2025arXiv251101167M/abstract
 
 Please let me know if you make use of the code so we can include your publication in the list above!
 

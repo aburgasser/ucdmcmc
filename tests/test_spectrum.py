@@ -16,6 +16,9 @@ def test_sample():
 		if DEFINED_INSTRUMENTS[instr]['sample']!='':
 			sp = getSample(instr,verbose=VERBOSE)
 			assert isinstance(sp,Spectrum)
+			assert len(sp.wave) > 0
+			assert len(sp.flux) > 0
+			assert len(sp.noise) > 0
 	return
 
 # test toWavelengths
@@ -103,12 +106,12 @@ def test_mask():
 	assert np.nanmedian(sp.flux.value) != np.nanmedian(sp1.flux.value)
 	sp = copy.deepcopy(sp1)
 # by S/N
-	sp.maskSN(15,action='remove')
+	sp.maskSN(100,action='remove')
 	assert len(sp.wave) < len(sp1.wave)
 	sp = copy.deepcopy(sp1)
-	sp.maskSN(15,action='replace',replace_value=np.nan)
+	sp.maskSN(100,action='replace',replace_value=np.nan)
 	assert len(sp.wave) == len(sp1.wave)
-	assert np.nanmedian(sp.flux.value) != np.nanmedian(sp1.flux.value)
+	assert np.nanmean(sp.flux.value) != np.nanmean(sp1.flux.value)
 	sp = copy.deepcopy(sp1)
 # trim
 	sp.trim([2,3])

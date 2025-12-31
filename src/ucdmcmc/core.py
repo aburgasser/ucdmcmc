@@ -15,11 +15,13 @@
 
 	* atmo20 - ATMO2020 model set from Phillips et al. (2020) bibcode: 2020A%26A...637A..38P
 	* atmo20pp - ATMO2020++ model set from Meisner et al. (2023) bibcode: 2023AJ....166...57M
-	* btdusty16 - BT-Dusty model set from TBD bibcode: TBD
+	* btcond - BT-Dusty model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A
+	* btdusty16 - BT-Dusty model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A
 	* btsettl08 - BT-Settled model set from Allard et al. (2012) bibcode: 2012RSPTA.370.2765A
 	* dback24 - Sonora Diamondback model set from Morley et al. (2024) bibcode: 2024ApJ...975...59M
 	* elfowl24 - Sonora Elfowl model set from Mukherjee et al. (2024) bibcode: 2024ApJ...963...73M
 	* elfowl24-ph3 - Sonora Elfowl model set with PH3 kept a vertical mixing abundance from Beiler et al. (2024) bibcode: 2024ApJ...973...60B
+	* elfowl25 - Sonora Elfowl model set v2 with CO2 enhanced from Wogan et al. (2025) bibcode: 2025RNAAS...9..108W
 	* karalidi21 - Sonora Cholla model set from Karalidi et al. (2021) bibcode: 2021ApJ...923..269K
 	* lowz - LOWZ model set from Meisner et al. (2021) bibcode: 2021ApJ...915..120M
 	* sand24 - SAND model set from Alvardo et al. (2024) bibcode: 2024RNAAS...8..134A
@@ -91,7 +93,7 @@ import warnings
 
 
 # reference parameters
-VERSION = '2025.10.23'
+VERSION = '2025.12.31'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
@@ -134,6 +136,7 @@ PARAMETERS = {
 	'kzz': {'type': float,'label': r'$\log\kappa_\mathrm{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,'altname': ['mix','mixing','k'],'default': 4.,'limits':[0,20]},
 	'fsed': {'type': float,'label': r'$f_\mathrm{sed}$','fmt': '{:.2f}','step':0.25,'altname': ['sed','sedimentation','f'],'default': 4.,'limits':[0,20]},
 	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,'altname': ['cloud','c'],'default': '','limits':[]},
+	'mlt': {'type': str,'label': 'Mixing Length Scale','fmt': '{:.1f}','step':-99,'altname': ['ml'],'default': 1.0,'limits':[]},
 	'broad': {'type': str,'label': 'Pressure Line Broadening','fmt': '{}','step':-99,'altname': ['brd','b'],'default': '','limits':[]},
 	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,'altname': ['diffusion','diff','adiabat','gamma'],'default': 1.0,'limits':[0,2]},
 	'av': {'type': float,'label': r'$A_V$','fmt': '{:.2f}','step':0.01,'altname': ['reddening','extinction','ext','red'],'default': 0.,'limits':[0,1000]},
@@ -155,19 +158,22 @@ for x in list(PARAMETERS.keys()): DEFAULT_MCMC_STEPS[x] = PARAMETERS[x]['step']
 
 # instruments
 DEFINED_INSTRUMENTS = {
-	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
-	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_UNCOVER33436_Burgasser2024.csv','sample_name': 'UNCOVER 33336', 'sample_bibcode': '2024ApJ...962..177B'},
-	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
-	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': ''},
-	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024arXiv240708518B'},
-#	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': '','sample_bibcode': ''},
-#	'KECK-LRIS-RED': {'instrument_name': 'Keck LRIS Red', 'altname': ['LRIS','LRIS-RED'], 'wave_range': [0.55,1.0]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': ''},
-#	'KECK-LRIS-BLUE': {'instrument_name': 'Keck LRIS Blue', 'altname': ['LRIS-BLUE'], 'wave_range': [0.3,0.6]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': ''},
-	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D'},
-	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B'},
+	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '', 'sample': 'EUCLID_J0359-4740_Dominguez-Tagle2025.csv','sample_name': 'EUCLID J0359-4740', 'sample_bibcode': '2025ApJ...991...84D', 'absolute': False},
+	'FIRE-PRISM': {'instrument_name': 'FIRE Prism', 'altname': ['FIRE-LR'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 250, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-PRISM_Ross458C_Burgasser2010.csv','sample_name': 'Ross 458C', 'sample_bibcode': '2010ApJ...725.1405B', 'absolute': True},
+	'FIRE-ECHELLE': {'instrument_name': 'FIRE Echelle', 'altname': ['FIRE'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 6000, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-ECHELLE_J0722-0540_Bochanski2010.csv','sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2011AJ....142..169B', 'absolute': True},
+	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-PRISM_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
+	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': 'JWST-NIRSPEC-G395H_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
+	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-MIRI-LRS_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
+	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
+	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': 'KECK-NIRES_J0722-0540_Theissen2022.csv', 'sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2022RNAAS...6..151T', 'absolute': True},
+#	'KECK-LRIS-RED': {'instrument_name': 'Keck LRIS Red', 'altname': ['LRIS','LRIS-RED'], 'wave_range': [0.55,1.0]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
+#	'KECK-LRIS-BLUE': {'instrument_name': 'Keck LRIS Blue', 'altname': ['LRIS-BLUE'], 'wave_range': [0.3,0.6]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
+	'NIR': {'instrument_name': 'Generic near-infrared', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D', 'absolute': False},
+	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B', 'absolute': True},
+	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': True},
 #	'SHANE-KAST-BLUE': {'instrument_name': 'Shane Kast Red', 'altname': ['KAST','KAST-RED'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
 #	'SHANE-KAST-RED': {'instrument_name': 'Shane Kast Blue', 'altname': ['KAST-BLUE'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
-	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': [''], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': ''},
+	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': ['OIR'], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'bibcode': '', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': '', 'absolute': False},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -176,12 +182,13 @@ DEFINED_SPECTRAL_MODELS = {\
 	'btcond': {'instruments': {}, 'name': 'BT Cond', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['dusty-cond','bt-cond','btc'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btdusty16': {'instruments': {}, 'name': 'BT Dusty 2016', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['btdusty2016','dusty16','dusty2016','dusty-bt','bt-dusty','bt-dusty2016','btdusty','bt-dusty16','btd'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.0}}, \
 	'btsettl08': {'instruments': {}, 'name': 'BT Settl 2008', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['allard','allard12','allard2012','btsettl','btsettled','btsettl08','btsettl2008','BTSettl2008','bts','bts08'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'enrich': 0.}}, \
-#	'btsettl15': {'instruments': {}, 'name': 'BT Settl 2015', 'citation': 'Allard et al. (2015)', 'bibcode': '2015A&A...577A..42B', 'altname': ['allard15','allard2015','btsettl015','btsettl2015','BTSettl2015','bts15'],  'default': {'teff': 1500., 'logg': 5.0, 'z': 0.}}, \
+	'btsettl15': {'instruments': {}, 'name': 'BT Settl 2015', 'citation': 'Allard et al. (2015)', 'bibcode': '2015A&A...577A..42B', 'altname': ['allard15','allard2015','btsettl015','btsettl2015','BTSettl2015','bts15'],  'default': {'teff': 1500., 'logg': 5.0, 'z': 0.}}, \
 	'burrows06': {'instruments': {}, 'name': 'Burrows et al. (2006)', 'citation': 'Burrows et al. (2006)', 'bibcode': '2006ApJ...640.1063B', 'altname': ['burrows','burrows2006'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'cld': 'nc'}}, \
-	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024ApJ...975...59M', 'altname': ['diamondback','sonora-diamondback','sonora-dback','dback24','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
-	# 'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
+	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024ApJ...975...59M', 'altname': ['dback','diamondback','sonora-diamondback','sonora-dback','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
+	'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
 	'elfowl24-ph3': {'instruments': {}, 'name': 'Sonora Elfowl + PH3', 'citation': 'Beiler et al. (2024)', 'bibcode': '2024ApJ...973...60B', 'altname': ['elfowl-ph3','sonora-elfowl-ph3','beiler24','beiler','bei24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'elfowl25': {'instruments': {}, 'name': 'Sonora Elfowl 2025', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2','elfowl-v2','elfowl-co2','sonora-elfowl-co2','wog25'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
 	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['kitzmann20','kitzmann2020','kit20','helios-r2','helios20','helios2020'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
@@ -189,12 +196,13 @@ DEFINED_SPECTRAL_MODELS = {\
 	'madhu11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
 	'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
 	'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
+    'newera25': {'instruments': {}, 'name': 'Phoenix New Era', 'citation': 'Hauschildt et al. (2025)', 'bibcode': '2025A%26A...698A..47H', 'altname': ['newera','hau25','phoenix-newera','phoenix25','phx25'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0., 'enrich': 0.0}}, \
 	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
 	'saumon12': {'instruments': {}, 'name': 'Saumon et al. (2012)', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sphinx23': {'instruments': {}, 'name': 'SPHINX', 'citation': 'Iyer et al. (2023)', 'bibcode': '2023ApJ...944...41I', 'altname': ['sphinx2023','sphinx','iyer2023','iyer','iyer23'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
+	'sphinx25': {'instruments': {}, 'name': 'SPHINX', 'citation': 'Iyer et al. (2025)', 'bibcode': '', 'altname': ['sphinx2025','sphinx2','iyer25','iye25'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1, 'cld': 'log-29', 'mlt': 1.}}, \
 	'tremblin15': {'instruments': {}, 'name': 'Tremblin et al. (2015)', 'citation': 'Tremblin et al. (2015)', 'bibcode': '2015ApJ...804L..17T', 'altname': ['tremblin','tre15','tremblin2015'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0, 'kzz': 8.0, 'ad': 1.20}}, \
-	# 'saumon12': {'instruments': {}, 'name': 'Saumon et al. 2012', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12','saumon2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	# 'btnextgen': {'instruments': {}, 'name': 'BT NextGen', 'citation': 'Allard et al. (2012)', 'bibcode': '2012RSPTA.370.2765A', 'altname': ['nextgen-bt','btnextgen','btn'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0.0, 'enrich': 0.}}, \
 	# 'cond01': {'instruments': {}, 'name': 'AMES Cond', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['cond','cond-ames','amescond'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
 	# 'dusty01': {'instruments': {}, 'name': 'AMES Dusty', 'citation': 'Allard et al. (2001)', 'bibcode': '2001ApJ...556..357A', 'altname': ['dusty','dusty-ames','amesdusty'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.0}}, \
@@ -1188,8 +1196,11 @@ class Spectrum(object):
 			if verbose==True: print('\nWarning: cannot interpret mask {}; not removing any pixels'.format(mask))
 			return
 
-# do nothing if msk is eliminating everything
+# do nothing if msk is eliminating everything or nothing
 		if (True in msk) == False: 
+			if verbose==True: print('Nothing to mask; no action taken'.format(action))
+			return
+		if (False in msk) == False: 
 			if verbose==True: print('Mask would {} all elements, revisit with a better mask; no action taken'.format(action))
 			return
 
@@ -1248,14 +1259,14 @@ class Spectrum(object):
 				Mask applied to remove 1 pixels
 		'''
 # clean out data points with nans in flux
-		msk = [np.isnan(x) for x in self.flux.value]
+		msk1 = np.array([np.isnan(x) for x in self.flux.value])
 # clean out data points with nans in noise
-		msk2 = [np.isnan(x) for x in self.noise.value]
-		msk = msk or msk2
+		msk2 = np.array([np.isnan(x) for x in self.noise.value])
+		msk = np.logical_or(msk1,msk2)
 # clean out data points with 0s in noise - using only for data
 		if zeronoise==True:
-			msk2 = [x==0 for x in self.noise.value]
-			msk = msk or msk2
+			msk3 = np.array([x==0 for x in self.noise.value])
+			msk = np.logical_or(msk,msk3)
 # mask
 		self.mask(msk,action=action,verbose=verbose,**kwargs)
 		return
@@ -1302,9 +1313,9 @@ class Spectrum(object):
 		'''
 		if isUnit(limit): limit  = limit.value
 		sn = self.flux.value/self.noise.value
-		msk = [np.isnan(x) for x in sn]
-		msk2 = [x<limit for x in sn]
-		msk = msk or msk2
+		msk1 = np.array([np.isnan(x) for x in sn])
+		msk2 = np.array([x<limit for x in sn])
+		msk = np.logical_or(msk1,msk2)
 		self.mask(msk,action=action,verbose=verbose,**kwargs)
 		return
 
@@ -2342,11 +2353,11 @@ class Modelset(object):
 		if not isUnit(self.flux): self.flux = self.flux*fluxunit
 
 # FILL IN RELEVANT INFORMATION FROM MODEL ARRAY
-		tmp = checkName(self.instrument,DEFINED_INSTRUMENTS)
+		tmp = checkName(self.instrument,DEFINED_INSTRUMENTS,verbose=False)
 		if isinstance(tmp,bool)==False:
 			self.instrument=tmp
 			self.instrument_parameters = DEFINED_INSTRUMENTS[tmp]
-		tmp = checkName(self.modelname,DEFINED_SPECTRAL_MODELS)
+		tmp = checkName(self.modelname,DEFINED_SPECTRAL_MODELS,verbose=False)
 		if isinstance(tmp,bool)==False:
 			self.modelname=tmp
 			self.model_parameters = DEFINED_SPECTRAL_MODELS[tmp]
@@ -2695,7 +2706,7 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 		splat
 	'''	
 # check instrument name
-	inst = checkName(instrument,DEFINED_INSTRUMENTS,output='')	
+	inst = checkName(instrument,DEFINED_INSTRUMENTS,output='',verbose=False)	
 	if inst=='': 
 		raise ValueError('Instrument {} is not one of the defined instruments; try {}'.format(instrument,list(DEFINED_INSTRUMENTS.keys())))
 # does it have a sample?
@@ -2723,7 +2734,7 @@ def getSample(instrument='NIR',verbose=ERROR_CHECKING):
 # INFORMATION ON A MODEL
 # UPDATE THIS WITH NEW MODEL STRUCTURE
 # THIS WILL BE OBVIATED BY MODELSET CLASS
-def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
+def modelInfo(model=None,instrument=None,output='print',verbose=ERROR_CHECKING):
 	'''
 	Purpose
 	-------
@@ -2783,9 +2794,9 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 	availmodels = {}
 	for a in allfiles:
 		var = os.path.basename(a).split('_')
-		mname = checkName(var[1],DEFINED_SPECTRAL_MODELS,output=var[1])
+		mname = checkName(var[1],DEFINED_SPECTRAL_MODELS,output=var[1],verbose=False)
 		if mname not in list(availmodels.keys()): availmodels[mname] = {'instruments': [], 'files': []}
-		inst = checkName(var[2].replace('.h5',''),DEFINED_INSTRUMENTS,output=var[2].replace('.h5',''))
+		inst = checkName(var[2].replace('.h5',''),DEFINED_INSTRUMENTS,output=var[2].replace('.h5',''),verbose=False)
 		availmodels[mname]['instruments'].append(inst)
 		availmodels[mname]['files'].append(os.path.basename(a))
 	models = list(availmodels.keys())
@@ -2793,39 +2804,71 @@ def modelInfo(model=None,instrument=None,verbose=ERROR_CHECKING):
 
 # downselect preferred model
 	if model != None:
-		mname = checkName(model,DEFINED_SPECTRAL_MODELS,output=model)
+		mname = checkName(model,DEFINED_SPECTRAL_MODELS,output=model,verbose=False)
 		if mname in models: models = [mname]
 		else:
 			print('Model set {} is not currently available in installation'.format(model))
 			return False
 
-# print information about models
-	for mdl in models:
-		print('\nModel set {}:'.format(mdl))
-		f = availmodels[mdl]['instruments'][0]
-		if len(availmodels[mdl]['instruments']) > 0:
-			for i in availmodels[mdl]['instruments'][1:]: f=f+', {}'.format(i)
-		print('\tComputed for instruments {}'.format(f))
-		print('\tParameters:')
-		mpars,wave = getModelSet(availmodels[mdl]['files'][0])
-		kys = list(mpars.columns)
-		for x in ['model','file',DEFAULT_FLUX_NAME]:
-			if x in kys: kys.remove(x)
-		for k in kys:
-			vals = list(set(list(mpars[k])))
-			vals.sort()
-			if isinstance(mpars.loc[0,k],float)==True:
-				if len(vals)==1: print('\t\t{}: {}'.format(k,vals[0]))
-				else: print('\t\t{}: {} to {}'.format(k,np.nanmin(vals),np.nanmax(vals)))
-			else:
-				f = vals[0]
-				if len(vals) > 0:
-					for i in vals[1:]: f=f+', {}'.format(i)
-				print('\t\t{}: {}'.format(k,f))
+# choice of outputs
+	if output.lower() in ['table','pandas','database','spreadsheet']:
+		dp = pandas.DataFrame(columns=['Model','Instruments','Parameters','Bibcode'])
+		for mdl in models:
+			dadd = {'Model': mdl}
+			f = 'None'
+			if len(availmodels[mdl]['instruments']) > 0:
+				f = availmodels[mdl]['instruments'][0]
+				for i in availmodels[mdl]['instruments'][1:]: f=f+', {}'.format(i)
+			dadd['Instruments'] = f
+			f = ''
+			mpars,wave = getModelSet(availmodels[mdl]['files'][0])
+			kys = list(mpars.columns)
+			for x in ['model','file',DEFAULT_FLUX_NAME]:
+				if x in kys: kys.remove(x)
+			for k in kys:
+				vals = list(set(list(mpars[k])))
+				vals.sort()
+				if isinstance(mpars.loc[0,k],float)==True:
+					if len(vals)==1: f = '{}: {}'.format(k,vals[0])
+					else: f = '{}: {} to {}'.format(k,np.nanmin(vals),np.nanmax(vals))
+				else:
+					f = '{}: {}'.format(k,vals[0])
+					if len(vals) > 0:
+						for i in vals[1:]: f=f+', {}'.format(i)
+				f=f+'; '
+			dadd['Parameters'] = f[:-2]
+			if mdl in list(DEFINED_SPECTRAL_MODELS.keys()): dadd['Bibcode'] = DEFINED_SPECTRAL_MODELS[mdl]['bibcode']
+			else: dadd['Bibcode'] = ''
+			dp.loc[len(dp)] = dadd
+		return dp
+# just print information about models
+	else:
+		for mdl in models:
+			print('\nModel set {}:'.format(mdl))
+			f = availmodels[mdl]['instruments'][0]
+			if len(availmodels[mdl]['instruments']) > 0:
+				for i in availmodels[mdl]['instruments'][1:]: f=f+', {}'.format(i)
+			print('\tComputed for instruments {}'.format(f))
+			print('\tParameters:')
+			mpars,wave = getModelSet(availmodels[mdl]['files'][0])
+			kys = list(mpars.columns)
+			for x in ['model','file',DEFAULT_FLUX_NAME]:
+				if x in kys: kys.remove(x)
+			for k in kys:
+				vals = list(set(list(mpars[k])))
+				vals.sort()
+				if isinstance(mpars.loc[0,k],float)==True:
+					if len(vals)==1: print('\t\t{}: {}'.format(k,vals[0]))
+					else: print('\t\t{}: {} to {}'.format(k,np.nanmin(vals),np.nanmax(vals)))
+				else:
+					f = vals[0]
+					if len(vals) > 0:
+						for i in vals[1:]: f=f+', {}'.format(i)
+					print('\t\t{}: {}'.format(k,f))
 
 # information from DEFINED_SPECTRAL_MODELS
-		if mdl in list(DEFINED_SPECTRAL_MODELS.keys()):
-			print('\taka {} models from {} (bibcode = {})'.format(DEFINED_SPECTRAL_MODELS[mdl]['name'],DEFINED_SPECTRAL_MODELS[mdl]['citation'],DEFINED_SPECTRAL_MODELS[mdl]['bibcode']))
+			if mdl in list(DEFINED_SPECTRAL_MODELS.keys()):
+				print('\taka {} models from {} (bibcode = {})'.format(DEFINED_SPECTRAL_MODELS[mdl]['name'],DEFINED_SPECTRAL_MODELS[mdl]['citation'],DEFINED_SPECTRAL_MODELS[mdl]['bibcode']))
 
 # success
 	return
@@ -3993,7 +4036,7 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 
 # if no or incomplete fit parameters, conduct an initial grid fit
 	chk = True
-	for k in mkys: chk=chk and (k in list(p0.keys()))
+	for k in mkys: chk=(chk and (k in list(p0.keys())))
 	if chk==False:
 		if verbose==True: print('Running initial grid fit')
 		p0 = fitGrid(spc,mdls,absolute=absolute,plimits=plimits,report=False,verbose=False)
