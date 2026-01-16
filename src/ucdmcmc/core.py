@@ -93,7 +93,7 @@ import warnings
 
 
 # reference parameters
-VERSION = '2025.12.31'
+VERSION = '2026.01.15'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
