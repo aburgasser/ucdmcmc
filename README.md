@@ -121,18 +121,20 @@ We map our spectrum to the model wave grid, then we can conduct a grid fit to fi
 	sp.toWavelengths(wave)
 	par = ucdmcmc.fitGrid(sp,models)
 
-Best parameters:
-	model = elfowl24
-	co = 0.5
-	kzz = 7.0
-	logg = 4.75
-	teff = 600.0
-	z = -1.0
-	scale = 1.616424519232685e-20
-	chis = 1290354.449246344
-	radius = 0.056390540414855445
-	dof = 853.0
-	rchi = 1512.7250284247878
+Output: 
+
+	Best parameters:
+		model = elfowl24
+		co = 0.5
+		kzz = 7.0
+		logg = 4.75
+		teff = 600.0
+		z = -1.0
+		scale = 1.616424519232685e-20
+		chis = 1290354.449246344
+		radius = 0.056390540414855445
+		dof = 853.0
+		rchi = 1512.7250284247878
 	
 <img width="804" height="487" alt="plot2" src="https://github.com/user-attachments/assets/461ac995-0361-46bc-93cc-dd42ebcd58c5" />
 
@@ -140,18 +142,20 @@ These grid parameters can be used to initiate an MCMC fit using using `ucdmcmc.f
 
 	npar = ucdmcmc.fitMCMC(sp,models,par,nstep=100,burn=0.25,absolute=True,verbose=False)
 
-Best parameters:
-	model: elfowl24
-	co: 0.580211857460554
-	kzz: 7.3919278336945515
-	logg: 5.365954958490183
-	teff: 633.8145781129864
-	z: -0.9388765775373868
-	scale: 1.328342456515958e-20
-	chis: 1328254.9586724846
-	radius: 0.05111914351717615
-	dof: 848
-	rchi: 1512.7250284247878
+Output: 
+
+	Best parameters:
+		model: elfowl24
+		co: 0.580211857460554
+		kzz: 7.3919278336945515
+		logg: 5.365954958490183
+		teff: 633.8145781129864
+		z: -0.9388765775373868
+		scale: 1.328342456515958e-20
+		chis: 1328254.9586724846
+		radius: 0.05111914351717615
+		dof: 848
+		rchi: 1512.7250284247878
 	
 <img width="914" height="567" alt="plot3" src="https://github.com/user-attachments/assets/8a1053cf-22df-463f-a120-1c60dfbda799" />
 
