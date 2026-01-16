@@ -187,8 +187,15 @@ DEFINED_SPECTRAL_MODELS = {\
 	'dback24': {'instruments': {}, 'name': 'Sonora Diamondback', 'citation': 'Morley et al. (2024)', 'bibcode': '2024ApJ...975...59M', 'altname': ['dback','diamondback','sonora-diamondback','sonora-dback','diamondback24','morley24','mor24'], 'default': {'teff': 1200., 'logg': 5.0, 'z': 0., 'fsed': 2.}}, \
 	'drift': {'instruments': {}, 'name': 'Drift', 'citation': 'Witte et al. (2011)', 'bibcode': '2011A&A...529A..44W', 'altname': ['witte','witte11','witte2011','helling'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.}}, \
 	'elfowl24': {'instruments': {}, 'name': 'Sonora Elfowl', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl','sonora-elfowl','elfowl24','mukherjee','mukherjee24','muk24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'elfowl24-lowteff': {'instruments': {}, 'name': 'Sonora Elfowl (low temperature)', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl-low','sonora-elfowl-low','elfowl24-low','mukherjee-low','mukherjee24-low','muk24-low'], 'default': {'teff': 500., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'elfowl24-midteff': {'instruments': {}, 'name': 'Sonora Elfowl (mid temperature)', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl-mid','sonora-elfowl-mid','elfowl24-mid','mukherjee-mid','mukherjee24-mid','muk24-mid'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
+	'elfowl24-highteff': {'instruments': {}, 'name': 'Sonora Elfowl (high temperature)', 'citation': 'Mukherjee et al. (2024)', 'bibcode': '2024ApJ...963...73M', 'altname': ['elfowl-high','sonora-elfowl-high','elfowl24-high','mukherjee-high','mukherjee24-high','muk24-high'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
 	'elfowl24-ph3': {'instruments': {}, 'name': 'Sonora Elfowl + PH3', 'citation': 'Beiler et al. (2024)', 'bibcode': '2024ApJ...973...60B', 'altname': ['elfowl-ph3','sonora-elfowl-ph3','beiler24','beiler','bei24'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.}}, \
 	'elfowl25': {'instruments': {}, 'name': 'Sonora Elfowl 2025', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2','elfowl-v2','elfowl-co2','sonora-elfowl-co2','wog25'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
+	'elfowl25-lowteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (low temperature)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-low','elfowl-v2-low','elfowl-co2-low','sonora-elfowl-co2-low','wog25-low'], 'default': {'teff': 500., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
+	'elfowl25-midteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (mid temperature)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-mid','elfowl-v2-mid','elfowl-co2-mid','sonora-elfowl-co2-mid','wog25-mid'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
+	'elfowl25-highteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (high temperature)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-high','elfowl-v2-high','elfowl-co2-high','sonora-elfowl-co2-high','wog25-high'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
+    'exorem21': {'instruments': {}, 'name': 'Exo-REM 2021', 'citation': 'Blain et al. (2021)', 'bibcode': '2021A&A...646A..15B,', 'altname': ['exorem','exorem2021','exo-rem','blain2021','blain21','bla21'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 0.45, 'cld': 'SIMPLE'}}, \
 	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['kitzmann20','kitzmann2020','kit20','helios-r2','helios20','helios2020'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
@@ -3291,14 +3298,14 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 # discrete (string) variables
 			if isinstance(modelpars.loc[0,k],str)==True:
 				par = list(set(list(modelpars[k])))
-				if verbose==True: print('Constaining {} to within {}'.format(k,constraints[k]))
+				if verbose==True: print('Constraining {} to within {}'.format(k,constraints[k]))
 				for p in par:
 					if p not in constraints[k]: 
 						modelpars = modelpars[modelpars[k]!=p]
 						modelpars.reset_index(inplace=True,drop=True)
 # continuous variables
 			else:
-				if verbose==True: print('Constaining {} to {} to {}'.format(k,constraints[k][0],constraints[k][1]))
+				if verbose==True: print('Constraining {} to {} to {}'.format(k,constraints[k][0],constraints[k][1]))
 				modelpars = modelpars[modelpars[k]>=constraints[k][0]]
 				modelpars = modelpars[modelpars[k]<=constraints[k][1]]
 				modelpars.reset_index(inplace=True,drop=True)
@@ -3356,21 +3363,23 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 			wv,flx = dp['wave'],dp['flux']
 # don't know what to do
 #		print(modelpars.loc[i,'file'],len(flx))
-		try: md = np.isfinite(np.nanmedian(flx))
-		except: raise ValueError('Could not read in file {}'.format(modelpars.loc[i,'file']))
-
+		# if np.isfinite(np.nanmedian(flx))==False:
+		# 	if verbose==True: print('Warning: problem reading in file {}; skipping'.format(modelpars.loc[i,'file']))
+		try:
 # resample if desired
-		if doresample==True:
-			mdl = Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
-			mdl.toWavelengths(wave0)
-			if smooth > 1: mdl.smooth(smooth)
-#			mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
-			wv,flx = mdl.wave.value,mdl.flux.value
-		else:
-			if i==0: wave0 = copy.deepcopy(wv)
+			if doresample==True:
+				mdl = Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
+				mdl.toWavelengths(wave0)
+				if smooth > 1: mdl.smooth(smooth)
+#				mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
+				wv,flx = mdl.wave.value,mdl.flux.value
+			else:
+				if i==0: wave0 = copy.deepcopy(wv)
 
-		par[flux_name] = flx
-		pars.append(par)
+			par[flux_name] = flx
+			pars.append(par)			
+		except:
+			if verbose==True: print('Warning: problem reading in file {}; skipping'.format(modelpars.loc[i,'file']))
 
 
 # save the models
@@ -3814,11 +3823,11 @@ def fitGrid(spc,models,altpar={},plimits={},constraints={},flux_name=DEFAULT_FLU
 		if k in list(mdls.columns):
 			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
-				if verbose==True: print('Constaining {} to within {}'.format(k,plimits[k]))
+				if verbose==True: print('Constraining {} to within {}'.format(k,plimits[k]))
 				for p in par:
 					if p not in plimits[k]: mdls = mdls[mdls[k]!=p]
 			else:
-				if verbose==True: print('Constaining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
+				if verbose==True: print('Constraining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
 				mdls = mdls[mdls[k]>=plimits[k][0]]
 				mdls = mdls[mdls[k]<=plimits[k][1]]
 				mdls.reset_index(inplace=True,drop=True)
@@ -4019,13 +4028,13 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 		if k in list(mdls.columns):
 			if isinstance(mdls.loc[0,k],str):
 				par = list(set(list(dp[k])))
-				if verbose==True: print('Constaining {} to within {}'.format(k,plimits[k]))
+				if verbose==True: print('Constraining {} to within {}'.format(k,plimits[k]))
 				for p in par:
 					if p not in plimits[k]: 
 						mdls = mdls[mdls[k]!=p]
 						mdls.reset_index(inplace=True,drop=True)
 			else:
-				if verbose==True: print('Constaining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
+				if verbose==True: print('Constraining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
 				mdls = mdls[mdls[k]>=plimits[k][0]]
 				mdls = mdls[mdls[k]<=plimits[k][1]]
 				mdls.reset_index(inplace=True,drop=True)
