@@ -162,7 +162,7 @@ DEFINED_INSTRUMENTS = {
 	'OIR': {'instrument_name': 'Generic optical and infrared (0.3-30 micron at R = 300)', 'altname': ['OPTICAL-INFRARED','O-IR'], 'wave_range': [0.3,30]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': False},
 	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '2025A%26A...697A...3E', 'sample': 'EUCLID_J0359-4740_Dominguez-Tagle2025.csv','sample_name': 'EUCLID J0359-4740', 'sample_bibcode': '2025ApJ...991...84D', 'absolute': False},
 	'FIRE-PRISM': {'instrument_name': 'FIRE Prism', 'altname': ['FIRE-LR'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 250, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-PRISM_Ross458C_Burgasser2010.csv','sample_name': 'Ross 458C', 'sample_bibcode': '2010ApJ...725.1405B', 'absolute': True},
-	'FIRE-ECHELLE': {'instrument_name': 'FIRE Echelle', 'altname': ['FIRE'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 6000, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-ECHELLE_J0722-0540_Bochanski2010.csv','sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2011AJ....142..169B', 'absolute': True},
+	'FIRE-ECHELLE': {'instrument_name': 'FIRE Echelle', 'altname': ['FIRE'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 6000, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-ECHELLE_J0722-0540_Bochanski2011.csv','sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2011AJ....142..169B', 'absolute': True},
 	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-PRISM_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
 	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-G395H_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
 	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-MIRI-LRS_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
@@ -171,7 +171,7 @@ DEFINED_INSTRUMENTS = {
 #	'KECK-LRIS-RED': {'instrument_name': 'Keck LRIS Red', 'altname': ['LRIS','LRIS-RED'], 'wave_range': [0.55,1.0]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
 #	'KECK-LRIS-BLUE': {'instrument_name': 'Keck LRIS Blue', 'altname': ['LRIS-BLUE'], 'wave_range': [0.3,0.6]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
 	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B', 'absolute': True},
-	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': True},
+	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-SXD_J0559-1404_Cushing2005.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2005ApJ...623.1115C', 'absolute': True},
 #	'SHANE-KAST-BLUE': {'instrument_name': 'Shane Kast Red', 'altname': ['KAST','KAST-RED'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
 #	'SHANE-KAST-RED': {'instrument_name': 'Shane Kast Blue', 'altname': ['KAST-BLUE'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
 	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': ['OIR'], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': '', 'absolute': False},
@@ -4514,11 +4514,32 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',xlabel='Step',labeldict=PARAME
 
 
 # PLOT PARAMETER DISTRIBUTIONS (CORNER PLOT) OF MCMC FIT
-def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECKING):
+def plotCorner(dpfit,plotpars=[],pbest={},weights=[],outfile='',verbose=ERROR_CHECKING):
+# if initial input is output from MCMC, prepare the outputs
+	if isinstance(dpfit,dict):
+		par = copy.deepcopy(dpfit)
+		if 'chain' in list(par.keys()): 
+			dpfit = copy.deepcopy(par['chain'])
+			plotpars = list(dpfit.columns)
+			if 'best' in list(par.keys()) and len(pbest) == 0: pbest = par['best']
+		else: 
+			try: 
+				dpfit = pandas.DataFrame(par)
+				plotpars = list(dpfit.columns)
+			except: 
+				if verbose==True: print('Cannot process input parameter array')
+				return
+	if isinstance(dpfit,pandas.core.frame.DataFrame) == False:
+		if verbose==True: print('Input array must be a pandas dataframe or dictionary of parameters')
+		return
+
 # choose plot columns
+	if len(plotpars)==0: plotpars = list(dpfit.columns)
 	ppars = copy.deepcopy(plotpars)
 	for x in plotpars:
-		if np.nanmin(dpfit[x])==np.nanmax(dpfit[x]): ppars.remove(x)
+		if isNumber(dpfit.loc[0,x])==False: ppars.remove(x)
+		elif np.nanmin(dpfit[x])==np.nanmax(dpfit[x]): ppars.remove(x)
+		else: pass
 	if len(ppars)==0:
 		if verbose==True: print('Warning: there are no parameters to plot!')
 		return
@@ -4526,6 +4547,8 @@ def plotCorner(dpfit,plotpars,pbest={},weights=[],outfile='',verbose=ERROR_CHECK
 	ppars2 = []
 	for k in list(PARAMETER_PLOT_LABELS.keys()):
 		if k in ppars: ppars2.append(k)
+	for k in ppars:
+		if k not in ppars2: ppars2.append(k)
 	dpplot = dpfit[ppars2]
 		
 # weights
