@@ -9,7 +9,7 @@ Markov Chain Monte Carlo (MCMC) fitting code for low-temperature stars, brown dw
 
 or from git:
 
-	git clone
+	git clone https://github.com/aburgasser/ucdmcmc.git
 	cd ucdmcmc
 	python -m setup.py install
 
