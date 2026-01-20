@@ -22,7 +22,8 @@ It is recommended that you install in a conda environment to ensure the dependen
 
 A check that this worked is that you can import `ucdmcmc` into python/jupyter noteobook, and that the `ucdmcmc.MODEL_FOLDER` points to the models folder that was downloaded
 
-`ucdmcmc` uses the following extenal packages:
+`ucdmcmc` uses the following external packages:
+
 * `astropy`: https://www.astropy.org/
 * `astroquery`: https://astroquery.readthedocs.io/en/latest/
 * `corner`: https://corner.readthedocs.io/en/latest/
