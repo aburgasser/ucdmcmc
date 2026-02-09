@@ -63,8 +63,12 @@
 # basic packages
 import copy
 import glob
+import gc
 import os
 import sys
+import time
+import tracemalloc
+import warnings
 
 # external packages
 #from astropy.coordinates import SkyCoord, EarthLocation, CartesianRepresentation, CartesianDifferential, Galactic, Galactocentric
@@ -79,11 +83,10 @@ np.seterr(all="ignore")
 import pandas
 import requests
 from scipy.interpolate import griddata,interp1d
-import scipy.stats as stats
+from scipy import stats, signal
 import spectres # https://ui.adsabs.harvard.edu/abs/2017arXiv170505165C/abstract
 from statsmodels.stats.weightstats import DescrStatsW
 from tqdm import tqdm
-import warnings
 
 #######################################################
 #######################################################
@@ -93,7 +96,7 @@ import warnings
 
 
 # reference parameters
-VERSION = '2026.01.15'
+VERSION = '2026.02.05'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
@@ -196,7 +199,7 @@ DEFINED_SPECTRAL_MODELS = {\
 	'elfowl25-lowteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (275-600 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-low','elfowl-v2-low','elfowl-co2-low','sonora-elfowl-co2-low','wog25-low'], 'default': {'teff': 500., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
 	'elfowl25-midteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (600-1500 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-mid','elfowl-v2-mid','elfowl-co2-mid','sonora-elfowl-co2-mid','wog25-mid'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
 	'elfowl25-highteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (1500-2400 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-high','elfowl-v2-high','elfowl-co2-high','sonora-elfowl-co2-high','wog25-high'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
-    'exorem21': {'instruments': {}, 'name': 'Exo-REM 2021', 'citation': 'Blain et al. (2021)', 'bibcode': '2021A&A...646A..15B,', 'altname': ['exorem','exorem2021','exo-rem','blain2021','blain21','bla21'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 0.45, 'cld': 'SIMPLE'}}, \
+	'exorem21': {'instruments': {}, 'name': 'Exo-REM 2021', 'citation': 'Blain et al. (2021)', 'bibcode': '2021A&A...646A..15B,', 'altname': ['exorem','exorem2021','exo-rem','blain2021','blain21','bla21'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 0.45, 'cld': 'SIMPLE'}}, \
 	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['kitzmann20','kitzmann2020','kit20','helios-r2','helios20','helios2020'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
@@ -204,7 +207,7 @@ DEFINED_SPECTRAL_MODELS = {\
 	'madhu11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
 	'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
 	'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
-    'newera25': {'instruments': {}, 'name': 'Phoenix New Era', 'citation': 'Hauschildt et al. (2025)', 'bibcode': '2025A%26A...698A..47H', 'altname': ['newera','hau25','phoenix-newera','phoenix25','phx25'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0., 'enrich': 0.0}}, \
+	'newera25': {'instruments': {}, 'name': 'Phoenix New Era', 'citation': 'Hauschildt et al. (2025)', 'bibcode': '2025A%26A...698A..47H', 'altname': ['newera','hau25','phoenix-newera','phoenix25','phx25'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0., 'enrich': 0.0}}, \
 	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
 	'saumon12': {'instruments': {}, 'name': 'Saumon et al. (2012)', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
@@ -247,29 +250,28 @@ if os.path.exists(ALT_MODEL_FOLDER)==False:
 #######################################################
 
 # DATA DOWNLOADER
-def downloadModel(file,url=MODEL_URL,targetdir=ALT_MODEL_FOLDER,verbose=ERROR_CHECKING):
+def downloadModel(file,url=MODEL_URL,targetdir=ALT_MODEL_FOLDER,overwrite=False,verbose=ERROR_CHECKING):
 	'''
 	TBD
 	Purpose
 	-------
 
-	General usage program to check if a key is present in a dictionary, with the option to look through alternate names
+	Downloads a model file from a given url to a specified folder
 
 	Parameters
 	----------
 
-	ref : str
-		A string that corresponds to the relevant key
+	file : str
+		Desired file, typically ends in '.h5'
 
-	refdict: dict
-		Dictionary for which to search for a key
+	url = MODEL_URL : str
+		Base url in which models are found
 
-	altref = 'altname' : str
-		If present, and refdict is a dictionary of dictionaries, will check the altname keys of the embedded dictionaries
-		to identify alternate names
+	targetdir = ALT_MODEL_FOLDER : str
+		Full path to directory to download model set to
 
-	output = False : bool
-		Default returned value if key is missing
+	overwrite = False : bool
+		Set to True to allow an existing file to be overwritten
 
 	verbose = ERROR_CHECKING : bool
 		Set to True to return verbose output
@@ -277,35 +279,25 @@ def downloadModel(file,url=MODEL_URL,targetdir=ALT_MODEL_FOLDER,verbose=ERROR_CH
 	Outputs
 	-------
 	
-	Returns the correct key from the dictionary, or if missing the value specified by output
+	No explicit return; if successful, `file` is downloaded to `targetdir`
 
 	Example
 	-------
 
 	>>> import ucdmcmc
-	>>> ucdmcmc.checkName('lowz',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	'lowz'
-
-	>>> ucdmcmc.checkName('meisner2021',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	'lowz'
-
-	>>> ucdmcmc.checkName('me',ucdmcmc.DEFINED_SPECTRAL_MODELS)
-
-	Could not find item me in input dictionary; try: ['atmo20', 'btdusty16', 'btsettl08', 'burrows06', 
-	'dback24', 'elfowl24', 'lowz', 'saumon12', 'sonora21', 'sand24']
-	False
+	>>> TBD
 
 	Dependencies
 	------------
 		
-	copy
+	glob
+	os
+	response
 
 	'''
 # already have it?
 	files = glob.glob(os.path.join(targetdir,file))
-	if len(files)>0:
+	if len(files)>0 and overwrite==False:
 		if verbose==True: print('\n{} is already present in {}'.format(file,targetdir))
 		return
 # try to get it
@@ -448,19 +440,51 @@ def isUnit(s):
 # CHECKS IF SOMETHING IS A NUMBER
 def isNumber(s):
 	'''
-	:Purpose: Checks if something is a number.
 
-	:param s: object to be checked
-	:type s: required
+	Purpose
+	-------
 
-	:Output: True or False
+	Checks if something is a number or can be converted into a non-nan float
 
-	:Example:
-	>>> import splat
-	>>> print splat.isNumber(3)
-		True
-	>>> print splat.isNumber('hello')
-		False
+	Parameters
+	----------
+
+	s : various
+		Quantity to check if a number
+
+	Outputs
+	-------
+	
+	Returns True if a number, False if not
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> import astropy.units as u
+	>>> ucdmcmc.isNumber(5)
+
+	True
+	
+	>>> ucdmcmc.isNumber(5*u.m)
+
+	True
+
+	>>> ucdmcmc.isNumber('5')
+
+	True
+
+	>>> ucdmcmc.isNumber('five')
+
+	False
+
+	Dependencies
+	------------
+		
+	astropy.unit
+	copy
+	numpy
+
 	'''
 	s1 = copy.deepcopy(s)
 	if isinstance(s1,bool): return False
@@ -487,12 +511,12 @@ def isArray(s):
 	----------
 
 	s : various
-		Quantity to check if unitted
+		Quantity to check if array
 
 	Outputs
 	-------
 	
-	Returns True if unitted, False if not
+	Returns True if an array, False if not
 
 	Example
 	-------
@@ -542,71 +566,172 @@ def isArray(s):
 
 # ROTATIONAL BROADENING KERNEL
 def lsfRotation(vsini,vsamp,epsilon=0.6,verbose=ERROR_CHECKING):
+
 	'''
-	Purpose: 
 
-		Generates a line spread function for rotational broadening, based on Gray (1992) 
-		Ported over by Chris Theissen and Adam Burgasser from the IDL routine 
-		`lsf_rotate <https://idlastro.gsfc.nasa.gov/ftp/pro/astro/lsf_rotate.pro>`_ writting by W. Landsman
+	Purpose
+	-------
 
-	Required Inputs:  
+	Generates a line spread function for rotational broadening, based on Gray (1992) 
+	Ported over by Chris Theissen and Adam Burgasser from the IDL routine 
+	`lsf_rotate <https://idlastro.gsfc.nasa.gov/ftp/pro/astro/lsf_rotate.pro>`_ writting by W. Landsman
+	This code adapted from `SPLAT <https://github.com/aburgasser/splat>`_
 
-		:param: **vsini**: vsini of rotation, assumed in units of km/s
-		:param: **vsamp**: sampling velocity, assumed in unit of km/s. vsamp must be smaller than vsini or else a delta function is returned
+	Parameters
+	----------
 
-	Optional Inputs:
+	vsini : float, int, or astropy quantity
+		vsini of rotation, assumed in units of km/s if not specified
+	
+	vsamp : float, int, or astropy quantity
+		sampling of lsf in velocity units, assumed same as vsini; vsamp must be smaller than vsini or else a delta function is returned
 
-		:param: **epsilon**: limb darkening parameter based on Gray (1992)
+	epsilon = 0.6: float
+		Limb darkening parameter based on Gray (1992)
 
-	Output:
+	Outputs
+	-------
+	
+	Line spread function kernel with length 2*vsini/vsamp (forced to be odd)
 
-		Line spread function kernel with length 2*vsini/vsamp (forced to be odd)
+	Example
+	-------
 
-	:Example:
-		>>> import splat
-		>>> kern = lsfRotation(30.,3.)
-		>>> print(kern)
-			array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
-			0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
-			0.44558751,  0.29053574,  0.		])
+	>>> import ucdmcmc
+	>>> kern = ucdmcmc.lsfRotation(30.,3.)
+	>>> print(kern)
+		array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
+		0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
+		0.44558751,  0.29053574,  0.		])
+
+	Dependencies
+	------------
+		
+	astropy.unit
+	copy
+	numpy
+
 	'''
+
 # limb darkening parameters
 	e1 = 2. * (1. - epsilon)
 	e2 = np.pi * epsilon/2.
 	e3 = np.pi * (1. - epsilon/3.)
 
+# check units
+	vunit = u.km/u.s
+	if isUnit(vsini): vunit = vsini.unit
+	else: vsini=vsini*vunit
+	if isUnit(vsamp): vsamp = vsamp.to(vsini.unit)
+	else: vsamp=vsamp*vsini.unit
+
 # vsini must be > vsamp - if not, return a delta function
-	if vsini <= vsamp:
+	if vsini.value <= vsamp.value:
 		if verbose==True: print('\nWarning: velocity sampling {} is broader than vsini {}; returning delta function')  
 		lsf = np.zeros(5)  
 		lsf[2] = 1.
 		return lsf
 
 # generate LSF
-	nsamp = np.ceil(2.*vsini/vsamp)
-	if nsamp % 2 == 0:
-		nsamp+=1
+	nsamp = np.ceil(2.*vsini.value/vsamp.value)
+	if nsamp % 2 == 0: nsamp+=1
 	x = np.arange(nsamp)-(nsamp-1.)/2.
-	x = x*vsamp/vsini
+	x = x*vsamp.value/vsini.value
 	x2 = np.absolute(1.-x**2)
 
 	return (e1*np.sqrt(x2) + e2*x2)/e3
 
 
-# SPECTRUM READING ROUTINE
+# GENERAL SPECTRUM READING ROUTINE
 def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,dimensionless=False,
-	comment='#',file_type='',delimiter='',hdunum=0,waveheader=False,crval1='CRVAL1',cdelt1='CDELT1',
-	wavelog=False,catch_sn=True,remove_nans=True,no_zero_noise=True,use_instrument_reader=True,
-	instrument='',verbose=ERROR_CHECKING,wave=[],flux=[],noise=[],**kwargs):
+	comment='#',file_type='',delimiter='',hdunum=0,waveheader=False,crpix1='CRPIX1',crval1='CRVAL1',cdelt1='CDELT1',
+	wavelog=False,remove_nans=True,no_zero_noise=True,verbose=ERROR_CHECKING):
 	'''
 	Purpose
 	-------
 
 	Reads in spectral data from a variety of formats
 
+	Parameters
+	----------
+
+	file : str
+		file containing spectral data
+	
+	wave_unit = DEFAULT_WAVE_UNIT : astropy unit
+		unit for wavelength array
+	
+	flux_unit = DEFAULT_FLUX_UNIT : astropy unit
+		unit for flux and noise arrays
+	
+	dimensionless = False : bool
+		Set to True to specify that the flux array is dimensionless (e.g., for reflectance or transmission spectra)
+
+	comment = '#' : str
+		Character to specify a comment line in an ascii file
+
+	file_type = '' : str
+		file type to override type inferred from file name (if left as ''). 
+		Possible options include 
+		* 'fit' or 'fits': fits file
+		* 'csv': comma-delimited
+		* 'tsv' or 'txt': tab-delimited 
+		* 'pipe': pipe-delimited ('|')
+		* 'tex': latex file ==> '&'-delimited
+
+	delimiter = '' : str
+		Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace ('\s+') is assumed
+
+	hdunum = 0 : int
+		For fits files, the default fits level contained the data and header
+	
+	waveheader = False: bool
+		For fits files, set to True to indicate wavelength array is specifed by header keywords
+	
+	crpix1 = 'CRPIX1', crval1 = 'CRVAL1', cdelt1='CDELT1' : str
+		For fits files, keywords specifying the initial pixel and wavelength value and linear ramp for pixel to wavelength conversion
+
+	wavelog = False: bool
+		For fits files, set to True to indicate wavelength array is in log units
+
+	remove_nans = True : bool
+		Set to True to remove datapoints that have nan wave or flux values
+
+	no_zero_noise = True : bool
+		Set to True to replace noise values that are zero to nan
+	
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	**kwargs = additional variables
+
+	Outputs
+	-------
+	
+	output : dict 
+		Dictionary containing the variables wave, flux, noise, and header
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> kern = ucdmcmc.lsfRotation(30.,3.)
+	>>> print(kern)
+		array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
+		0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
+		0.44558751,  0.29053574,  0.		])
+
+	Dependencies
+	------------
+		
+	astropy.unit
+	copy
+	numpy
+
 	'''
 
 # prepare output
+	wave,flux,noise = [],[],[]
 	output = {'wave':wave,'flux':flux,'noise':noise,'header':{}}
 
 # check inputs and keyword parameters
@@ -638,39 +763,43 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 			file_type = (file.replace('.'+k,'')).split('.')[-1]
 
 # fits - can be done with fits.open as local or online and w/ or w/o gzip/bzip2/pkzip
-	if 'fit' in file_type:
+	if 'fit' in file_type.lower():
 		with fits.open(os.path.normpath(file),ignore_missing_end=True,ignore_missing_simple=True,do_not_scale_image_data=True) as hdu:
 			hdu.verify('silentfix+ignore')
 			header = hdu[hdunum].header
 			if 'NAXIS3' in list(header.keys()): d = np.copy(hdu[hdunum].data[0,:,:])
 			else: d =  np.copy(hdu[hdunum].data)
+
 # make sure file is oriented correctly
-		if np.shape(d)[0]>np.shape(d)[1]: d = np.transpose(d)
+		if len(np.shape(d))>1:
+			if np.shape(d)[0]>np.shape(d)[1]: d = np.transpose(d)
 
 # wavelength is in header 
-		if waveheader==True and 'fit' in file_type and len(d[:,0])<3:
+		if waveheader==True and len(d[:,0])<3:
 			flux = d[0,:]
-			if crval1 in list(header.keys()) and cdelt1 in list(header.keys()):
-				wave = np.polyval([float(header[cdelt1]),float(header[crval1])],np.arange(len(flux)))
+			if len(d[:,0]) > 1: noise = d[1,:]
+			if crpix1 in list(header.keys()) and crval1 in list(header.keys()) and cdelt1 in list(header.keys()):
+				wave = np.polyval([float(header[cdelt1]),float(header[crval1])],np.arange(len(flux))+float(header[crpix1]))
 			else: 
-				raise ValueError('\nCannot find {} and {} keywords in header of fits file {}'.format(crval1,cdelt1,file))
+				raise ValueError('\nCannot find {}, {}, and {} keywords in header of fits file {}'.format(crpix1,crval1,cdelt1,file))
 # wavelength is explicitly in data array 
 		else:
 			wave = d[0,:]
 			flux = d[1,:]
-		if len(d[:,0]) > 2: noise = d[2,:]
-		else: noise = [np.nan]*len(wave)
+			if len(d[:,0]) > 2: noise = d[2,:]
 
-# ascii - can be done with pandas as local or online and w/ or w/o gzip/bzip2/pkzip
+# ascii - do with pandas as local or online and w/ or w/o gzip/bzip2/pkzip
 	else:
 		if 'csv' in file_type and delimiter=='': delimiter = ','
 		elif ('tsv' in file_type or 'txt' in file_type) and delimiter=='': delimiter = '\t'
 		elif 'pipe' in file_type and delimiter=='': delimiter = '|'
 		elif 'tex' in file_type and delimiter=='': delimiter = '&'
+# white space default
 		else: delimiter = r'\s+'
 
 # initial read
 		dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,header=0)
+		if len(dp.columns)<2: raise ValueError('Only detected one column of data in {}; at least wave and flux must be specified'.format(f))
 # if numbers in first row, replace with header
 		if isNumber(dp.columns[0])==True:
 			cnames = ['wave','flux']
@@ -678,16 +807,22 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 			if len(dp.columns)>3: 
 				for i in range(len(dp.columns))-3: cnames.append('c{}'.format(i))
 			dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,names=cnames)
-# assume order wave, flux, noise
-		wave = np.array(dp[dp.columns[0]])
-		flux = np.array(dp[dp.columns[1]])
-		if len(dp.columns)>2: noise = np.array(dp[dp.columns[2]])
-		else: noise = [np.nan]*len(dp)
+# assume order is wave, flux, noise
+		if 'wave' in list(dp.columns): wave = dp['wave']
+		else: wave = np.array(dp[dp.columns[0]])
+		if 'flux' in list(dp.columns): flux = dp['flux']
+		else: flux = np.array(dp[dp.columns[1]])
+		if len(dp.columns)>2:
+			if 'noise' in list(dp.columns): noise = dp['noise']
+			else: noise = np.array(dp[dp.columns[2]])
 # placeholder header
 		header = fits.Header()	  # blank header
 
+#  no noise array specified
+	if len(noise)==0: noise = [np.nan]*len(flux)
+
 #  wavelength scale is logarithmic
-	if 'wavelog'==True: wave = 10.**wave
+	if 'wavelog'==True: wave = [10.**x for x in wave]
 
 # final output dictionary
 	output['wave'] = np.array(wave)
@@ -717,6 +852,168 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 	return output
 
 
+# RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
+# RETAINED WHEN SPECTRES DOESN'T WORK
+def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
+	'''
+	
+	Purpose
+	-------
+
+	Resamples a spectrum onto a wavelength grid with optional smoothing
+
+	Parameters
+	----------
+
+	sp : splat.Spectrum class
+		splat Spectrum object to resample onto wave grid
+
+	wave : np.ndarray or list
+		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
+		otherwise assumed to be in the units of `wave_unit`
+
+	method = 'integrate' : str
+		Method by which spectrum is resampled onto new wavelength grid; options are:
+		* 'integrate': flux in integrated across wach wavelength grid point (also 'int')
+		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
+		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
+		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
+		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
+
+	default_noise = np.nan : int or float
+		default noise value if not provided in noise array
+
+	smooth = 1 : int
+		pixel scale over which to do additional (boxcar) smoothing
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns a spectrum object in which the orginal spectrum has been resampled onto the given wave grid, 
+	with additional smoothing if noted. 
+
+	Example
+	-------
+
+	>>> import splat
+	>>> import ucdmcmc
+	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
+	>>> sp2.toWavelengths(sp1.wave)
+	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
+	(16279.746979311662, 0.9281232247150684, 561)
+
+	Dependencies
+	------------
+		
+	`isUnit()`
+	splat
+	
+
+	'''
+# prepare input flux
+#	 if isUnit(flux): flx0=flux.to(flux_unit).value
+#	 else: flx0 = np.array(copy.deepcopy(flux))
+
+# # prepare input uncertainty
+#	 if isUnit(noise): unc0=noise.to(flux_unit).value
+#	 else: unc0 = np.array(copy.deepcopy(noise))
+#	 if len(noise)==0: 
+#		 if isUnit(default_noise): dns=default_noise.to(flux_unit).value
+#		 else: dns = np.array(copy.deepcopy(default_noise))
+#		 unc0 = np.array([dns]*len(flx0))
+
+# # prepare input wavelength grid
+#	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
+#	 else: wv0 = np.array(copy.deepcopy(wave0))
+
+
+# prepare output wavelength grid
+	if isUnit(wave): wv=wave.to(sp.wave.unit).value
+	else: wv = np.array(copy.deepcopy(wave))
+	wshift = 2.*np.absolute(np.nanmedian(np.roll(wv,-1)-wv))
+
+
+# trim if necessary
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),np.nanmin(wv),np.nanmax(wv))
+	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),len(sp.wave))
+	# wv0 = wv0[wtr]
+	# flx0 = flx0[wtr]
+	# unc0 = unc0[wtr]
+	# wtr = np.where(np.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
+	# if len(wv0[wtr])==0:
+	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(np.nanmin(wv0),np.nanmax(wv0),np.nanmin(wv),np.nanmax(wv)))
+
+# prepare spectrum object
+	# spc = copy.deepcopy(sp)
+	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
+
+# run interpolation
+	flx = [np.nan]*len(wv)
+	unc = [np.nan]*len(wv)
+	smind = int(smooth)
+	for i,w in enumerate(wv):
+		if i<smind: wrng = [w-(wv[smind]-w),wv[smind]]
+		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
+		else: wrng = [wv[i-smind],wv[i+smind]]
+		wsel = np.where(np.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
+		cnt = len(sp.wave.value[wsel])
+# expand range
+		if cnt <= 1:
+			wsel = np.where(np.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
+			cnt = len(sp.wave.value[wsel])
+		if cnt >= 1:
+			flx0s = sp.flux.value[wsel]
+			unc0s = sp.noise.value[wsel]
+			wv0s = sp.wave.value[wsel]
+			wn = np.where(~np.isnan(flx0s))
+			if len(flx0s[wn])>0:
+				if method.lower() in ['mean','mn','average','ave']:
+					flx[i] = np.nanmean(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = np.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
+				elif method.lower() in ['weighted mean','wmn','weighted']:
+					wts = 1./unc0s[wn]**2
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
+					flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+				elif method.lower() in ['integrate','int']:
+					wts = np.ones(len(wv0s[wn]))
+					if cnt > 1: 
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
+					else:
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+				elif method.lower() in ['weighted integrate','wint']:
+					wts = 1./unc0s[wn]**2
+					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
+					if cnt > 1: 
+						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
+					else:
+						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
+						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
+					# unc[i] = (np.trapz(np.ones(len(wv0[wn])),wv0[wn])/np.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
+					# flx[i] = np.trapz(flx0[wn],wv0[wn])/np.trapz(np.ones(len(wv0[wn])),wv0[wn])
+# median by default
+				else:
+					flx[i] = np.nanmedian(flx0s[wn])
+					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = flx[i]/np.nanmedian(flx0s[wn]/unc0s[wn])
+		# else:
+		#	 print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
+#					unc[i] = np.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
+
+# return flux
+	# return flx*flux_unit
+
+# return Spectrum object
+	return Spectrum(wave=np.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
+
+
+
 
 #######################################################
 #######################################################
@@ -726,18 +1023,125 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 
 class Spectrum(object):
 	'''
-	:Description: 
-		Class for containing spectral and source data from SpeX Prism Library.
+	Description
+	-----------
+
+		Spectrum class based on `SPLAT <http://www.github.com/aburgasser/splat>_`
 		This is a temporary structure until astropy.specutils is completed
 
 	'''
 
-	def __init__(self, *args, verbose=ERROR_CHECKING, **kwargs):
-		self.name = kwargs.get('name','')
-		self.instrument = kwargs.get('instrument','')
-		self.wave = kwargs.get('wave',np.array([]))
-		self.flux = kwargs.get('flux',np.array([]))
-		self.noise = kwargs.get('noise',np.array([]))
+	def __init__(self, *args, wave=np.array([]), flux=np.array([]), noise=np.array([]), name='', instrument='', 
+		filename='', wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT, verbose=ERROR_CHECKING, **kwargs):
+		'''
+		Purpose
+		-------
+
+			Initialize an instance of a Spectrum class based on `SPLAT <http://www.github.com/aburgasser/splat>_`
+			This is a temporary structure until astropy.specutils is completed
+
+		Parameters
+		----------
+
+		args : various
+			Optional array arguments, as follows:
+			* single string ==> filename
+			* single pandas Dataframe - must contain wave and flux vectors
+			* single dictionary - must contain wave and flux elements
+			* single array - must have at least two array elements interpretted as wave and flux vectors
+			* two or more arrays ==> interpreted as wave, flux, and optionally noise
+
+		wave = np.array([]) : np.ndarray
+			Input wavelength array
+		
+		flux = np.array([]) : np.ndarray
+			Input flux array
+		
+		noise = np.array([]) : np.ndarray
+			Input noise array
+		
+		name = '' : str
+			Name for source; assumed filename if that is provided
+
+# STOPPED HERE
+
+		wave_unit = DEFAULT_WAVE_UNIT : astropy unit
+			unit for wavelength array
+		
+		flux_unit = DEFAULT_FLUX_UNIT : astropy unit
+			unit for flux and noise arrays
+		
+		dimensionless = False : bool
+			Set to True to specify that the flux array is dimensionless (e.g., for reflectance or transmission spectra)
+
+		comment = '#' : str
+			Character to specify a comment line in an ascii file
+
+		file_type = '' : str
+			file type to override type inferred from file name (if left as ''). 
+			Possible options include 
+			* 'fit' or 'fits': fits file
+			* 'csv': comma-delimited
+			* 'tsv' or 'txt': tab-delimited 
+			* 'pipe': pipe-delimited ('|')
+			* 'tex': latex file ==> '&'-delimited
+
+		delimiter = '' : str
+			Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace ('\s+') is assumed
+
+		hdunum = 0 : int
+			For fits files, the default fits level contained the data and header
+		
+		waveheader = False: bool
+			For fits files, set to True to indicate wavelength array is specifed by header keywords
+		
+		crpix1 = 'CRPIX1', crval1 = 'CRVAL1', cdelt1='CDELT1' : str
+			For fits files, keywords specifying the initial pixel and wavelength value and linear ramp for pixel to wavelength conversion
+
+		wavelog = False: bool
+			For fits files, set to True to indicate wavelength array is in log units
+
+		remove_nans = True : bool
+			Set to True to remove datapoints that have nan wave or flux values
+
+		no_zero_noise = True : bool
+			Set to True to replace noise values that are zero to nan
+		
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+
+		**kwargs = additional variables
+
+		Outputs
+		-------
+		
+		output : dict 
+			Dictionary containing the variables wave, flux, noise, and header
+
+		Example
+		-------
+
+		>>> import ucdmcmc
+		>>> kern = ucdmcmc.lsfRotation(30.,3.)
+		>>> print(kern)
+			array([ 0.		,  0.29053574,  0.44558751,  0.55691445,  0.63343877,
+			0.67844111,  0.69330989,  0.67844111,  0.63343877,  0.55691445,
+			0.44558751,  0.29053574,  0.		])
+
+		Dependencies
+		------------
+			
+		astropy.unit
+		copy
+		numpy
+		'''
+# address some alternative keyword names
+		self.wave = wave
+		self.flux = flux
+		self.noise = noise
+		self.name = name
+		self.instrument = instrument
+		for x in ['inst','instr']: self.instrument = kwargs.get(x,self.instrument)
 		self.filename = ''
 		for x in ['file','filename','input']: self.filename = kwargs.get(x,self.filename)
 
@@ -745,15 +1149,32 @@ class Spectrum(object):
 		if len(args) == 1:
 			if isinstance(args[0],str)==True: self.filename = args[0]
 
-# option 2: a pandas dataframe is given  
+# option 2: a pandas dataframe is given and at least wave and flux are specified
 			elif isinstance(args[0],pandas.core.frame.DataFrame)==True:
 				if 'wave' in list(args[0].columns) and 'flux' in list(args[0].columns):
 					for k in list(args[0].columns): setattr(self,k,args[0][k])
 				else: 
 					if verbose==True: print('Passed a pandas array that is missing wave and/or flux columns')
-					empty=True
 
-# option 3: multiple lists or numpy arrays are given
+# option 3: a dictionary is passed (e.g,. output of readSpectrum)
+			elif isinstance(args[0],dict)==True:
+				if 'wave' in list(args[0].keys()) and 'flux' in list(args[0].keys()):
+					for k in list(args[0].keys()): setattr(self,k,args[0][k])
+				else: 
+					if verbose==True: print('Passed a dictionary that is missing wave and/or flux arrays')
+
+# option 4: an array is passed that has more than one subarray
+			elif isArray(args[0])==True:
+				if len(args[0])>=2 and isArray(args[0][0]):
+					self.wave = args[0][0]
+					self.flux = args[0][1]
+					if len(args[0])>=3: self.noise = args[0][2]
+				else: 
+					if verbose==True: print('Passed an array that does not have at least two subarrays (wave and flux)')
+			else:
+				pass
+
+# option 5: multiple lists or numpy arrays are given
 # interpret as wave, flux, and optionally noise
 		elif len(args) > 1:
 			if isArray(args[0]) and isAarry(args[1]):
@@ -763,7 +1184,6 @@ class Spectrum(object):
 				self.flux = args[1]
 			else:
 				if verbose==True: print('Multiple inputs need to be lists or numpy arrays')
-				empty=True
 
 			if len(args) > 2:
 				if isArray(args[2]):
@@ -778,9 +1198,8 @@ class Spectrum(object):
 
 # read in spectrum, being careful not to overwrite specifically assigned quantities
 			rs = readSpectrum(self.filename,**kwargs)
-			if 'wave' in rs.keys():
-				for k in list(rs.keys()): 
-					if k not in list(kwargs.keys()): setattr(self,k.lower(),rs[k])
+			for k in list(rs.keys()): 
+				if k not in list(kwargs.keys()): setattr(self,k.lower(),rs[k])
 
 # None of this worked; create an empty Spectrum object (can be used for copying)
 		if len(self.wave)==0 and len(self.flux)==0:
@@ -794,27 +1213,31 @@ class Spectrum(object):
 			if len(self.noise)==0: self.noise=np.array([np.nan]*len(self.flux))
 			else: raise ValueError('Cannot creat Spectrum object; noise array len {:.0f} differs from flux array len {:.0f}'.format(len(self.wave),len(self.flux)))
 
-# process spectral data
 # convert to numpy arrays
 		if not isinstance(self.wave,np.ndarray): self.wave = np.array(self.wave)
 		if not isinstance(self.flux,np.ndarray): self.flux = np.array(self.flux)
-#		if len(self.noise)==0: self.noise = [np.nan]*len(self.wave)
 		if not isinstance(self.noise,np.ndarray): self.noise = np.array(self.noise)
 
 # assure wave, flux, noise have units
-		if not isUnit(self.wave): self.wave = np.array(self.wave)*self.wave.unit
-		if not isUnit(self.flux): self.flux = np.array(self.flux)*self.flux.unit
-		if not isUnit(self.noise): self.noise = np.array(self.noise)*self.flux.unit
+		if not isUnit(self.wave): self.wave = np.array(self.wave)*wave_unit
+		self.wave.to(wave_unit,equivalencies=u.spectral())
+		if not isUnit(self.flux): self.flux = np.array(self.flux)*flux_unit
+		self.flux.to(flux_unit,equivalencies=u.spectral_density(self.wave))
+		if not isUnit(self.noise): self.noise = np.array(self.noise)*flux_unit
+		self.noise.to(flux_unit,equivalencies=u.spectral_density(self.wave))
 
 # create a copy to store as the original
 		self.original = copy.deepcopy(self)
 
 		return
 
+
 # copy function
 	def __copy__(self):
 		'''
-		:Purpose: Make a copy of a Spectrum object
+		Purpose
+		-------
+		Make a copy of a Spectrum object
 		'''
 		s = type(self)(verbose=False)
 		s.__dict__.update(self.__dict__)
@@ -823,27 +1246,30 @@ class Spectrum(object):
 # alt copy function
 	def copy(self):
 		'''
-		:Purpose: Make a copy of a Spectrum object
+		Purpose
+		-------
+		Make a copy of a Spectrum object
 		'''
 		return self.__copy__()
 
 # representation of spectrum
 	def __repr__(self):
 		'''
-		:Purpose: A simple representation of the Spectrum object
+		Purpose
+		-------
+		A simple representation of the Spectrum object
 		'''
 		return '{} spectrum of {}'.format(self.instrument,self.name)
 
 	def info(self,file=''):
 		'''
-		:Purpose: 
-			Provides a brief summary of relevant properties of a spectrum
+		Purpose
+		-------
+		Provides a brief summary of relevant properties of a spectrum
 
-		:Required Inputs:
-			None
-
-		:Optional Inputs:
-			file = '' | str
+		Parameters
+		----------
+		file = '' : str
 			file to save information to if desired; by default prints to screen 
 
 		
@@ -911,9 +1337,17 @@ class Spectrum(object):
 			if verbose==True: print('toWavelengths: cannot convert input wave unit {} to spectrum wave unit {} no action taken'.format(nwv.unit,self.wave.unit))
 			return
 
-# use spectres
+# try using spectres
 #		print(self.wave,self.flux,self.noise)
 		nflx,nns = spectres.spectres(nwv.value,self.wave.value,self.flux.value,spec_errs=self.noise.value,fill=replace,verbose=verbose)
+
+# if failed, use built in resample program
+		if np.isnan(np.nanmedian(nflx)):
+			newsp = resample(self,nwv)
+			nflx = newsp.flux.value
+			nns = newsp.noise.value
+
+
 		self.wave = nwv
 		self.flux = nflx*self.flux.unit
 		self.noise = nns*self.flux.unit
@@ -1332,47 +1766,53 @@ class Spectrum(object):
 	def export(self,filename='',clobber=True,delimiter='\t',save_header=True,save_noise=True,file_type='',comment='#',
 		wave_name=DEFAULT_WAVE_NAME,flux_name=DEFAULT_FLUX_NAME,noise_name=DEFAULT_NOISE_NAME):
 		'''
-		:Purpose: 
-			Exports a Spectrum object to either a fits or ascii file, depending on file extension given.  
-			If no filename is explicitly given, the Spectrum.filename attribute is used. 
-			If the filename does not include the full path, the file is saved in the current directory.  
-			Spectrum.export and `Spectrum.save()`_ function in the same manner.
+		Purpose
+		-------
+		Exports a Spectrum object to a file (ascii or fits) depending on file extension given.  
 
-		.. _`Spectrum.save()` : api.html#splat.core.Spectrum.save
+		Parameters
+		----------
+		
+		filename = '' : str
+			String specifying the filename to save; filename can also be included as an argument; if not provided, Spectrum.filename is used; alternate keywords: `file`
+		
+		clobber = True : bool
+			Set to True to overwrite file, or False to raise flag if file exists (default = True) 
+		
+		delimiter = '\t' : str
+			Character or string to specify as delimiter between columns (default = '\t'); alternate keywords: `sep` 
+		
+		file_type = '' : str
+			File type to save, if not specified from filename
+		
+		save_header = True : bool
+			Set to True to add header to ascii files (default = True) 
+		
+		save_noise = True : bool
+			Set to True to save the noise column (default = True) 
+		
+		comment = '#' : str
+			String to specify comment character (default = '#') 
+		
+		wave_name = DEFAULT_WAVE_NAME : str
+			String specifying the name of the wavelength column
 
-		:Required Inputs: 
-			None
+		flux_name = DEFAULT_FLUX_NAME : str
+			String specifying the name of the flux column
 
-		:Optional Inputs: 
-			:param filename: String specifying the filename to save; filename can also be included as an argument; if not provided, Spectrum.filename is used; alternate keywords: `file`
-			:param clobber: Set to True to overwrite file, or False to raise flag if file exists (default = True) 
-			:param csv: Set to True to write a CSV (comma-delimited) file (default = False) 
-			:param tab: Set to True to write a tab-delimited file (default = True) 
-			:param delimiter: character or string to specify as delimiter between columns (default = '\t'); alternate keywords: `sep` 
-			:param save_header: set to True to add header to ascii files (default = True) 
-			:param save_noise: set to True to save the noise column (default = True) 
-			:param comment: use to specify comment character (default = '#') 
+		noise_name = DEFAULT_NOISE_NAME : str
+			String specifying the name of the noise column
 
-		:Output: 
-			An ascii or fits file with the data and header
+		Output
+		------
+		An ascii or fits file with the data and header
 
-		:Example:
-		   >>> import splat
-		   >>> sp = splat.getSpectrum(lucky=True)[0]
-		   >>> sp.export('/Users/adam/myspectrum.txt')
-		   >>> from astropy.io import ascii
-		   >>> data = ascii.read('/Users/adam/myspectrum.txt',format='tab')
-		   >>> data
-			<Table length=564>
-			  wavelength		  flux		  uncertainty   
-			   float64		  float64		   float64	 
-			-------------- ----------------- -----------------
-			0.645418405533			   0.0			   nan
-			0.647664904594 6.71920214475e-16 3.71175052033e-16
-			0.649897933006 1.26009925777e-15 3.85722895842e-16
-			0.652118623257 7.23781818374e-16 3.68178778862e-16
-			0.654327988625 1.94569566622e-15 3.21007116982e-16
-			...
+		Example
+		-------
+		   >>> import ucdmcmc
+		   TBD
+
+
 		'''
 
 # prep inputs
@@ -1728,6 +2168,41 @@ class Spectrum(object):
 
 		return
 
+# smooth spectrum
+	def smooth(self,width,method='boxcar'):
+		'''
+		:Purpose: 
+
+			Smooths a spectrum over a given pixel range using a smoothing kernel
+
+		:Required Inputs:
+
+			width: pixel width of smoothing (use broaden or toWavelengths for other kinds of smoothing)
+
+		:Optional Inputs:
+
+			:param method = 'boxcar': the type of smoothing window to use; see http://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.signal.get_window.html for more details (default = 'hamming')
+
+		:Output: 
+
+			None: spectrum is smoothed
+
+		:Example:
+
+			TBD
+
+		'''
+
+		try: window = signal.get_window(method,int(np.round(width)))
+		except: 
+			print('Warning: smooth function {} is not recognized, no smoothing applied'.format(method))
+			return
+
+		neff = np.nansum(window)/np.nanmax(window)		# effective number of pixels
+		self.flux = signal.convolve(self.flux.value, window/np.nansum(window), mode='same',method='direct')*self.flux.unit
+		self.noise = (signal.convolve(self.noise.value, window/np.nansum(window), mode='same',method='direct')/(neff**0.5))*self.noise.unit
+		return
+
 
 # scale spectrum
 	def scale(self,factor,noiseonly=False):
@@ -1735,7 +2210,6 @@ class Spectrum(object):
 		:Purpose: 
 
 			Scales a Spectrum object's flux and noise values by a constant factor. 
-
 
 		:Required Inputs:
 
@@ -1750,17 +2224,7 @@ class Spectrum(object):
 			None; spectrum is scaled
 
 		:Example:
-		   >>> import splat
-		   >>> sp = splat.getSpectrum(lucky=True)[0]
-		   >>> sp.fluxMax()
-		   <Quantity 1.0577336634332284e-14 erg / (cm2 micron s)>
-		   >>> sp.computeSN()
-		   124.5198
-		   >>> sp.scale(1.e15)
-		   >>> sp.fluxMax()
-		   <Quantity 1.0577336549758911 erg / (cm2 micron s)>
-		   >>> sp.computeSN()
-		   124.51981
+			TBD
 		'''
 		self.noise = self.noise*factor
 		if noiseonly == False: self.flux = self.flux*factor
@@ -1780,14 +2244,7 @@ class Spectrum(object):
 		:Output: 
 			None; spectrum is normalized
 		:Example:
-		   >>> import splat
-		   >>> sp = splat.getSpectrum(lucky=True)[0]
-		   >>> sp.normalize()
-		   >>> sp.fluxMax()
-		   <Quantity 1.0 erg / (cm2 micron s)>
-		   >>> sp.normalize(waverange=[2.25,2.3])
-		   >>> sp.fluxMax()
-		   <Quantity 1.591310977935791 erg / (cm2 micron s)>
+			TBD
 		'''
 		if not isArray(limits): limits = [limits]
 		if len(limits) == 0:
@@ -1837,11 +2294,7 @@ class Spectrum(object):
 			Returns tuple containing filter-based spectrophotometic magnitude and its uncertainty
 
 		:Example:
-		   >>> import splat
-		   >>> sp = splat.getSpectrum(lucky=True)[0]
-		   >>> sp.fluxCalibrate('2MASS J',15.0)
-		   >>> sp.filterMag(sp,'2MASS J')
-			(15.002545668628173, 0.017635234089677564)
+			TBD
 		'''
 
 # for now leaning on splat.photometry package
@@ -1873,11 +2326,7 @@ class Spectrum(object):
 		None, Spectrum object is changed to a flux calibrated spectrum
 
 		:Example:
-		   >>> import splat
-		   >>> sp = splat.getSpectrum(lucky=True)[0]
-		   >>> sp.fluxCalibrate('2MASS J',15.0)
-		   >>> splat.filterMag(sp,'2MASS J')
-			(15.002545668628173, 0.017635234089677564)
+			TBD
 		'''
 
 # for now leaning on splat.photometry package
@@ -2091,7 +2540,6 @@ class Spectrum(object):
 
 
 
-
 # reset to original form
 	def reset(self):
 		'''
@@ -2235,6 +2683,137 @@ class Spectrum(object):
 		return
 
 
+# stitch two spectra
+def stitch(s1,s2,rng=[],verbose=ERROR_CHECKING,scale=True):
+	'''
+	:Purpose: 
+
+		Stitches together two spectra covering different wavelength scales.
+
+	:Required Inputs: 
+
+		:param s1: first spectrum object
+		:param s2: second spectrum object (not necessarily in order)
+
+	:Optional Inputs: 
+
+		:param rng: range over which spectra are relatively scaled and combined (if desired); if neither spectrum cover this range, then no relative scaling is done and spectra are combined whereever they overlap (default: [])
+		:param scale: set to True to relatively scale spectra over rng; if rng is not provided, or spectra to not overlap, this is automatially False (default: True)
+		:param wave_unit: wavelength unit of final spectrum (default: wavelength unit of s1)
+		:param flux_unit: flux unit of final spectrum (default: flux unit of s1)
+		:param verbose: set to True to provide feedback (default: False)
+
+	:Output: 
+
+		New spectrum object of stitched spectrum
+
+	:Example:
+	   >>> import splat
+	   >>> spopt = Spectrum(file='myopticalspectrum.fits')
+	   >>> spnir = Spectrum(file='myopticalspectrum.fits')
+	   >>> sp = ucdmcmc.stitch(spopt,spnir,rng=[0.8,0.9])
+	'''
+
+# generate copies of spectrum objects
+	sp1 = copy.deepcopy(s1)
+	sp2 = copy.deepcopy(s2)
+	
+# assert common wave and flux units based on first spectrum
+	wave_unit = sp1.wave.unit
+	flux_unit = sp1.flux.unit
+	sp2.toWaveUnit(wave_unit)
+	sp2.toFluxUnit(flux_unit)
+
+# check range
+	rngflag = True
+	if len(rng) == 0:
+		rng = [np.nanmax([np.nanmin(sp1.wave.value),np.nanmin(sp2.wave.value)]),\
+			np.nanmin([np.nanmax(sp1.wave.value),np.nanmax(sp2.wave.value)])]*wave_unit
+	if not isUnit(rng): rng=rng*wave_unit
+	rng = (rng.to(wave_unit)).value
+	if rng[0] < np.nanmin(sp1.wave.value[0:]): rng[0] = np.nanmin(sp1.wave.value[0:])
+	if rng[0] < np.nanmin(sp2.wave.value[0:]): rng[0] = np.nanmin(sp2.wave.value[0:])
+	if rng[1] > np.nanmax(sp1.wave.value[:-1]): rng[1] = np.nanmax(sp1.wave.value[:-1])
+	if rng[1] > np.nanmax(sp2.wave.value[:-1]): rng[1] = np.nanmax(sp2.wave.value[:-1])
+	if rng[0] >= rng[1]:
+		if verbose== True: print('Stich region {} to {} does not overlap both spectra'.format(rng[0],rng[1]))
+		rngflag = False
+
+# overlap and scaling
+	drng = rng[1]-rng[0]
+	if rngflag==True:
+
+# interpolation of second spectrum
+		if verbose==True: print('Scaling over the region {} to {}'.format(rng[0],rng[1]))
+
+# find overlap region, assuming first spectrum sets the flux scale standard
+# assume this minimizes chi^2 residuals
+		w1over = np.where(np.logical_and(np.array(sp1.wave.value)>=rng[0],np.array(sp1.wave.value)<=rng[1]))
+		w2over = np.where(np.logical_and(np.array(sp2.wave.value)>=rng[0]-0.5*drng,np.array(sp2.wave.value)<=rng[1]+0.5*drng))
+		wv12 = np.array(sp1.wave.value)[w1over]
+		flx12 = np.array(sp1.flux.value)[w1over]
+		ns12 = np.array(sp1.noise.value)[w1over]
+		f2r = interp1d(sp2.wave.value[w2over],sp2.flux.value[w2over],bounds_error=False,fill_value=np.nan)
+		n2r = interp1d(sp2.wave.value[w2over],sp2.noise.value[w2over],bounds_error=False,fill_value=np.nan)
+		vtot = np.zeros(len(wv12))
+		if np.isnan(np.nanmedian(ns12))==False: vtot=vtot+ns12**2
+		if np.isnan(np.nanmedian(n2r(wv12)))==False: vtot=vtot+n2r(wv12)**2
+
+		if scale == True:
+# joint uncertainty
+			chi,scl,_ = compareSpec(flx12,f2r(wv12),vtot**0.5)
+			if np.isnan(scl)==False: sp2.scale(scl)
+			f2r = interp1d(sp2.wave.value[w2over],sp2.flux.value[w2over],bounds_error=False,fill_value=np.nan)
+			n2r = interp1d(sp2.wave.value[w2over],sp2.noise.value[w2over],bounds_error=False,fill_value=np.nan)
+
+# initial piece, spectrum with minimum wavelength
+	if np.nanmin(sp1.wave.value) < np.nanmin(sp2.wave.value):
+		w1 = np.where(np.array(sp1.wave.value)<rng[0])
+		wave = np.array(sp1.wave.value)[w1]
+		flux = np.array(sp1.flux.value)[w1]
+		noise = np.array(sp1.noise.value)[w1]
+	else:
+		w1 = np.where(np.array(sp2.wave.value)<rng[0])
+		wave = np.array(sp2.wave.value)[w1]
+		flux = np.array(sp2.flux.value)[w1]
+		noise = np.array(sp2.noise.value)[w1]
+
+# mixed region
+	if rngflag == True:
+		if np.isnan(np.nanmedian(ns12))==False and np.isnan(np.nanmedian(n2r(wv12)))==False: 
+			flxmid = (flx12/(ns12**2)+f2r(wv12)/(n2r(wv12)**2))/(1./(ns12**2)+1./(n2r(wv12)**2))
+			nsmid = (1./(1./(ns12**2)+1./(n2r(wv12)**2)))**0.5
+		else: 
+			flxmid = 0.5*(flx12+f2r(wv12))
+			nsmid = 1/(vtot**0.5)
+					
+		wave = np.append(wave,wv12)
+		flux = np.append(flux,flxmid)
+		noise = np.append(noise,nsmid)
+
+# add on spectrum with maximum wavelength
+	if np.nanmin(sp1.wave.value) < np.nanmin(sp2.wave.value):
+		w2 = np.where(np.array(sp2.wave.value)>rng[1])
+		wave = np.append(wave,np.array(sp2.wave.value)[w2])
+		flux = np.append(flux,np.array(sp2.flux.value)[w2])
+		noise = np.append(noise,np.array(sp2.noise.value)[w2])
+	else:
+		w2 = np.where(np.array(sp1.wave.value)>rng[1])
+		wave = np.append(wave,np.array(sp1.wave.value)[w2])
+		flux = np.append(flux,np.array(sp1.flux.value)[w2])
+		noise = np.append(noise,np.array(sp1.noise.value)[w2])
+
+# put back units
+	wave = wave*wave_unit
+	flux = flux*flux_unit
+	noise = noise*flux_unit
+
+# create new spectrum object containing combined spectrum
+	sp = Spectrum(wave=wave,flux=flux,noise=noise)
+	sp.name = 'Stitched spectrum of {} and {}'.format(sp1.name,sp2.name)
+
+		
+	return sp
 
 
 #######################################################
@@ -2245,23 +2824,34 @@ class Spectrum(object):
 
 class Modelset(object):
 	'''
-	:Description: 
-		Class for containing spectral models including wavelength array
-		Main elements are wavelength array, flux grid, and parameter grid
-		Convenience functions for manipulating spectral fluxes
+	Description
+	-----------
+	Class for containing spectral models including wavelength array
+	Main elements are wavelength array, flux grid, and parameter grid
+	Convenience functions for manipulating spectral fluxes
 	'''
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, modelname='sand24', instrument='NIR', verbose=ERROR_CHECKING, *args, **kwargs):
 		'''
+		Purpose
+		-------
 		Initializes a model set
+
+		Dependencies
+		------------
+			
 		'''
 		self.wave = kwargs.get('wave',np.array([]))
 		self.flux = kwargs.get('flux',np.array([]))
 		self.parameters = kwargs.get('parameters',pandas.DataFrame())
-		self.modelname = ''
-		for x in ['name','model','modelname']: self.modelname = kwargs.get(x,self.modelname)
-		self.instrument = ''
-		for x in ['instrument','inst','instr']: self.instrument = kwargs.get(x,self.instrument)
+		self.modelname = modelname
+		for x in ['name','model','modelset','set']: self.modelname = kwargs.get(x,self.modelname)
+		tmp = checkName(self.modelname,DEFINED_SPECTRAL_MODELS,output=False)
+		if not isinstance(tmp,bool): self.modelname = tmp
+		self.instrument = instrument
+		for x in ['inst','instr']: self.instrument = kwargs.get(x,self.instrument)
+		tmp = checkName(self.instrument,DEFINED_INSTRUMENTS,output=False)
+		if not isinstance(tmp,bool): self.instrument = tmp
 		self.filename = ''
 		for x in ['file','filename','input','fluxfile']: self.filename = kwargs.get(x,self.filename)
 		self.wavefile = kwargs.get('wavefile','')
@@ -2278,7 +2868,7 @@ class Modelset(object):
 
 # READ IN FLUXES AND PARAMETERS
 # one string argument - assume it is the filename
-		if len(args)>0 and self.filename=='':
+		if len(args)==1 and self.filename=='':
 			if isinstance(args[0],str)==True:
 				self.filename=args[0]
 
@@ -2374,19 +2964,29 @@ class Modelset(object):
 
 	def info(self):
 		'''
-		Basic information
+		Purpose
+		-------
+		Basic information of the model set
+
+		Dependencies
+		------------
+			
 		'''
 		print('\n{} models for {} instrument'.format(self.modelname,self.instrument))
 		if len(self.model_parameters)>0:
 			print('\nModel Information:')
 			cols = list(self.model_parameters.keys())
+			for x in ['instruments']:
+				if x in cols: cols.remove(x)
 			cols.sort()
-			for x in cols: print('\t{}: {}'.format(x,str(self.model_parameters[x])))
+			for x in cols: 
+				if self.model_parameters[x] != '': print('\t{}: {}'.format(x,str(self.model_parameters[x])))
 		if len(self.instrument_parameters)>0:
 			print('\nInstrument Information:')
 			cols = list(self.instrument_parameters.keys())
 			cols.sort()
-			for x in cols: print('\t{}: {}'.format(x,str(self.instrument_parameters[x])))
+			for x in cols: 
+				if self.instrument_parameters[x] != '': print('\t{}: {}'.format(x,str(self.instrument_parameters[x])))
 		print('\nModel Parameters:')
 		kys = list(self.parameters.columns)
 		kys.sort()
@@ -2407,36 +3007,324 @@ class Modelset(object):
 		return
 
 
-	def toWavelengths(self,wave):
+	def toWavelengths(self,newwave,replace=np.isnan,force=True,verbose=ERROR_CHECKING):
 		'''
-		resample all fluxes to an input wavelength grid
-		'''
-		pass
+		Purpose
+		-------
+		Maps all model fluxes onto a new wavelength grid via interpolation
 
-	def fluxConvert(self,unit):
-		'''
-		transfrom all fluxes to a new unit, including flam <-> fnu
-		'''
-		pass
+		Parameters
+		----------
+		newwave : array
+			Wavelength array to map to; if not unitted, assumed to by micron
 
-	def model(self,parameters):
-		'''
-		retrieves an individual model from model grid based on parameters
-		calls _gridModel and _interpolatedModel
-		'''
-		pass
+		replace = np.isnan : value
+			Value to replace flux elements that lie outside wavelength range
 
-	def _gridModel(self,parameters):
+		force = True : bool
+			Proceed with conversion even if wavelength ranges are not perfectly in range
+		
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+		
+		Outputs
+		-------
+		ModelSet fluxes changed
+
+		Example
+		-------
+		TBD
+
+		Dependencies
+		------------
+			
+		'''
+
+# check and unit convert new wavelength array
+		try:
+			tflx = []
+			for i,x in enumerate(self.flux):
+				sp = Spectrum(wave=self.wave,flux=x)
+				sp.toWavelengths(newwave,replace=replace,verbose=verbose,force=force)
+				tflx.append(sp.flux)
+			self.flux = np.array(tflx)*self.flux.unit
+		except:
+			if verbose==True: print('Unable to convert to wavelength grid {}; no action taken'.format(newwave))
+		return
+
+
+	def fluxConvert(self,funit,verbose=ERROR_CHECKING):
+		'''
+		Purpose
+		-------
+		Converts all the fluxes to new flux units, including between r'F\\_nu' and r'F\\_lambda'
+
+		Parameters
+		----------
+		newwave : array
+			Wavelength array to map to; if not unitted, assumed to by micron
+
+		funit = DEFAULT_FLUX_UNIT : astropy.unit
+			unit to convert flux and noise arrays to
+		
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+		
+		Outputs
+		-------
+		ModelSet fluxes changed
+
+		Example
+		-------
+		TBD
+
+		Dependencies
+		------------
+			
+		'''
+		try:
+			self.flux = np.array([f.to(funit,equivalencies=u.spectral_density(self.wave)) for f in self.flux])*self.flux.unit
+		except:
+			if verbose==True: print('Unable to convert fluxes from {} to {}; no action taken'.format(self.flux.unit,funit))
+		return
+
+
+	def sample(self,verbose=ERROR_CHECKING):
+		ind = np.random.uniform(len(self.flux))
+		name = '{} model: '.format(self.modelname)
+		for k in list(self.parameters.columns):
+			name=name+'{}={} '.format(k,self.parameters.loc[ind,k])
+		mdl = Spectrum(wave=self.wave,flux=self.flux[ind],noise=np.array([np.nan]*len(self.wave))*self.flux.unit,name=name)
+		mdl.parameters = dict(self.parameters.loc[0,:])
+		return mdl		
+
+
+	def _gridModel(self,par,flux_name=DEFAULT_FLUX_NAME,verbose=ERROR_CHECKING):
+		'''
+		Purpose
+		-------
+		Returns a specific model from a model set.
+
+		Parameters
+		----------
+		par : dict
+			Dictionary specifying the parameters of the grid model desired. The format is 
+			{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
+			have the same type as the parameter values in the models dataframe.
+
+		flux_name = DEFAULT_FLUX_NAME : str
+			Name to use for fluxes column
+
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+
+		Outputs
+		-------
+		Returns a Spectrum object containing the wavelength and model flux values.
+
+		Example
+		-------
+		TBD
+
+		Dependencies
+		------------
+			
+		`isUnit()`
+		`plotCopmare()`
+		copy
+		pandas
+		splat.Spectrum
+
+		'''
+
+# get model defaults
+		mset = checkName(self.modelname,DEFINED_SPECTRAL_MODELS,output=False)
+		if not isinstance(mset,bool): defaults = DEFINED_SPECTRAL_MODELS[mset]['default']
+		else: defaults = {}
+
+# check all model parameters are provided in set parameters or defaults
+		par0 = copy.deepcopy(par)
+		smdls = copy.deepcopy(self.parameters)
+		kys = list(smdls.columns)
+		for k in kys:
+# if parameter not provided, use defaults or bail out
+			if k not in list(par0.keys()):
+				if k not in list(defaults.keys()):
+					if verbose==True: print('Model parameter {} is not defined for input parameters or defaults'.format(k))
+				else:
+					if verbose==True: print('Using default value {} for model parameter {}'.format(defaults[k],k))
+					par0[k] = defaults[k]
+
+# downselect models or bail out if we're outside parameter range
+		smdls[flux_name] = self.flux
+		limits,steps = {},{}
+
+# do downselect
+		kys = list(par0.columns)
+		for k in kys:
+			if k in list(smdls.columns): 
+				smdls = smdls[smdls[k]==par0[k]]
+		if len(smdls)==0: 
+			raise ValueError('No models match parameters:\n{}'.format(par))
+		elif len(smdls)>1: 
+			if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
+
+# model name
+		name = '{} model: '.format(self.modelname)
+		for k in kys: 
+			if k in list(smdls.keys()): 
+				name=name+'{}={} '.format(k,smdls.loc[0,k])
+		mdl = Spectrum(wave=self.wave,flux=smdl.loc[0,flux_name]*self.flux.unit,noise=np.array([np.nan]*len(self.wave))*self.flux.unit,name=name)
+		mdl.applyPar(par)
+		mdl.parameters = dict(mdl.loc[0,:])
+		mdl.parameters.update(par0)
+		return mdl
+
+
+	def _interpModel(self,par,flux_name=DEFAULT_FLUX_NAME,verbose=ERROR_CHECKING):
+		'''
+		Purpose
+		-------
+
+		Generates an interpolated model for provided parameters, using log flux interpolation
+
+		Parameters
+		----------
+
+		par : dict
+			Dictionary specifying the parameters of the interpolated model desired. The format is 
+			{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
+			have the same type as the parameter values in the model's dataframe. Any parameters not
+			provided will be assumed to have the default values from DEFINED_SPECTRAL_MODELS
+
+		flux_name = DEFAULT_FLUX_NAME : str
+			Name to use for fluxes column
+
+		verbose = ERROR_CHECKING : bool
+			Set to True to return verbose output
+
+		Outputs
+		-------
+		
+		Returns a Spectrum object containing the wavelength and model flux values, optionally scaled.
+		If model cannot be successfully interpolated (out of range parameters), a ValueError is raised. 
+		If the wave parameter is not included or of a different length than the fluxe array, returns 
+		just the flux array.
+
+		Example
+		-------
+		TBD
+
+		Dependencies
+		------------
+		TBD			
+
+		'''
+# get model defaults
+		mset = checkName(self.modelname,DEFINED_SPECTRAL_MODELS,output=False)
+		if not isinstance(mset,bool): defaults = DEFINED_SPECTRAL_MODELS[mset]['default']
+		else: defaults = {}
+
+# check all model parameters are provided in set parameters or defaults
+		par0 = copy.deepcopy(par)
+		kys = list(self.parameters.columns)
+		for k in kys:
+# if parameter not provided, use defaults or bail out
+			if k not in list(par0.keys()):
+				if k not in list(defaults.keys()):
+					raise ValueError('Model parameter {} is not defined for input parameters or defaults; must specify all parameters'.format(k))
+				if verbose==True: print('Using default value {} for model parameter {}'.format(defaults[k],k))
+				par0[k] = defaults[k]
+
+# downselect models or bail out if we're outside parameter range
+		smdls = copy.deepcopy(self.parameters)
+		smdls[flux_name] = self.flux
+		limits,steps = {},{}
+
+		for k in kys:
+			vals = list(set(list(smdls[k])))
+			vals.sort()
+# discrete parameters - match exactly		
+			if isinstance(smdls.loc[0,k],str)==True: 
+				if par0[k] not in vals:
+					raise ValueError('Parameter {} = {} is not among values in models: {}'.format(k,par0[k],vals))
+				smdls = smdls[smdls[k]==par0[k]]
+			else:
+# continuous parameters			
+				valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+				step = np.nanmedian(valstep[1:])				
+				if par0[k] in vals:
+					if par0[k]==np.nanmax(vals): par0[k]=par0[k]-0.01*step
+					else: par0[k]=par0[k]+0.01*step
+				limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
+				if step>0:
+					smdls = smdls[smdls[k]>=limits[k][0]]
+					smdls = smdls[smdls[k]<=limits[k][1]]													 
+# overselected - no models to interpolate
+			if len(smdls)==0: 
+				raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par0[k]))
+		smdls.reset_index(inplace=True,drop=True)		
+
+# eliminate degenerate parameters
+		kys0 = copy.deepcopy(kys)
+		for k in kys:
+			if len(set(list(smdls[k])))<2: 
+				kys0.remove(k)
+				par0[k] = smdls.loc[0,k]
+		kys = copy.deepcopy(kys0)
+		
+# prep models for griddata interpolation
+# note that we are taking the log of teff and co
+		fitvals,parvals = (),[]
+		for k in kys:
+			if k=='teff' or k=='co': 
+				fitvals+=tuple([[np.log10(x) for x in smdls[k]]])
+				parvals.append(np.log10(par0[k]))
+			else:
+				fitvals+=tuple([list(smdls[k])])
+				parvals.append(par0[k])
+		parvals = np.array([parvals])
+		fitvals = np.transpose(np.vstack(fitvals))
+# run interpolation
+		flx = []
+		for i in range(len(smdls.loc[0,flux_name])):
+			fs = [np.log10(x[i]) for x in smdls[flux_name]]
+			try: 
+				flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
+			except: 
+				raise ValueError('getInterpModel failed for values {}; try reducing parameter constraints'.format(par0))
+		flx = np.array(flx)
+		flx = 10.**flx
+		if np.isnan(np.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
+
+# turn into Spectrum and scale if desired
+		name = '{} model: '.format(self.modelname)
+# NEED TO ADD - FORMAT STRING FROM PARAMETERS
+		for k in list(par0.keys()): 
+			name=name+'{}={} '.format(k,par0[k])
+		mdl = Spectrum(wave=self.wave,flux=flx*self.flux.unit,noise=np.array([np.nan]*len(self.wave))*self.flux.unit,name=name)
+
+# apply secondary parameters if present
+		mdl.applyPar(par0)
+		mdl.parameters = dict(mdl.loc[0,:])
+		mdl.parameters.update(par0)
+
+		return mdl
+
+
+	def model(self,par,force=False,verbose=ERROR_CHECKING):
 		'''
 		retrieves one of the models in the model grid based on parameters
 		'''
-		pass
+		if force==True:
+			try: mdl = self._gridModel(par,verbose=verbose)
+			except: raise ValueError('Parameters not in model grid:{}'.format(par))
+		else:
+			try: mdl = self._gridModel(par,verbose=verbose)
+			except: mdl = self._interpModel(par,verbose=verbose)
+		return mdl
 
-	def _interpolatedModel(self,parameters):
-		'''
-		computes an interpolated model among the model grid
-		'''
-		pass
+
 
 #######################################################
 #######################################################
@@ -2973,7 +3861,7 @@ def generateWave(wave_range,wstep,method='resolution',verbose=ERROR_CHECKING):
 
 # READ A PREDEFINED WAVELENGTH FILE
 # THIS WILL BE OBVIATED BY MODELSET CLASS
-def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=ERROR_CHECKING):
+def readWave(inp='SPEX-PRISM',prefix=WAVE_FILE_PREFIX,cname='wave',verbose=False):
 	'''
 	Reads in an csv file for wave
 	'''
@@ -3023,7 +3911,7 @@ def readModelSet(file,verbose=ERROR_CHECKING):
 
 # "GETS" A MODEL SET, INCLUDING THE WAVELENGTH FILE
 # THIS WILL BE OBVIATED BY MODELSET CLASS
-def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODEL_FILE_PREFIX,wave_prefix=WAVE_FILE_PREFIX,info=False,verbose=ERROR_CHECKING):
+def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODEL_FILE_PREFIX,wave_prefix=WAVE_FILE_PREFIX,info=False,verbose=False):
 	'''
 	Purpose
 	-------
@@ -3051,7 +3939,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 	info = False : bool
 		Set to True to report a summary of model parameters
 
-	verbose = ERROR_CHECKING : bool
+	verbose = False : bool
 		Set to True to return verbose output
 
 	Outputs
@@ -3085,55 +3973,139 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 		modelInfo(model=modelset)
 		return
 
-# construct expected file name and check it's there
-	if os.path.exists(modelset)==True: 
-		file=copy.deepcopy(modelset)
-	elif os.path.exists(os.path.join(MODEL_FOLDER,modelset))==True: 
-		file=os.path.join(MODEL_FOLDER,modelset)
-	elif os.path.exists(os.path.join(ALT_MODEL_FOLDER,modelset))==True: 
-		file=os.path.join(ALT_MODEL_FOLDER,modelset)
-	elif os.path.exists('{}{}_{}.h5'.format(file_prefix,modelset,instrument))==True: 
-		file = '{}{}_{}.h5'.format(file_prefix,modelset,instrument)
-	elif os.path.exists(os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument)))==True: 
-		file = os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))
-	else:
-		file = os.path.join(ALT_MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))
-	if verbose==True: print('Using model data file {}'.format(file))
-	if os.path.exists(file)==False:
+# test various versions of the potential file name and check they are there
+	if verbose==True: print('Searching {}'.format(modelset))
+	files = glob.glob(modelset)
+	if len(files)==0:
+		# if verbose==True: print('Searching {}'.format(os.path.join(MODEL_FOLDER,modelset)))
+		files = glob.glob(os.path.join(MODEL_FOLDER,modelset))
+	if len(files)==0:
+		# if verbose==True: print('Searching {}'.format(os.path.join(ALT_MODEL_FOLDER,modelset)))
+		files = glob.glob(os.path.join(ALT_MODEL_FOLDER,modelset))
+	if len(files)==0:
+		# if verbose==True: print('Searching {}'.format('{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+		files = glob.glob('{}{}_{}*.h5'.format(file_prefix,modelset,instrument))
+	if len(files)==0:
+		# if verbose==True: print('Searching {}'.format(os.path.join(MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument))))
+		files = glob.glob(os.path.join(MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	if len(files)==0:
+		# if verbose==True: print('Searching {}'.format(os.path.join(ALT_MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument))))
+		files = glob.glob(os.path.join(ALT_MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	# if len(files)==0:
+	# 	if verbose==True: print('Searching {}'.format('{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	# 	files = glob.glob('{}{}_{}*.h5'.format(file_prefix,modelset,instrument))
+	# if len(files)==0:
+	# 	if verbose==True: print('Searching {}'.format(os.path.join(MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument))))
+	# 	files = glob.glob(os.path.join(MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	# if len(files)==0:
+	# 	if verbose==True: print('Searching {}'.format(os.path.join(ALT_MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument))))
+	# 	files = glob.glob(os.path.join(ALT_MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	if len(files)==0:
 		print('WARNING: model set file for {} cannot be found, check your file name'.format(modelset))
 		modelInfo()
 		raise ValueError
-	models = readModelSet(file,verbose=verbose)
+
+	# if os.path.exists(modelset)==True: 
+	# 	files = [copy.deepcopy(modelset)]
+	# elif os.path.exists(os.path.join(MODEL_FOLDER,modelset))==True: 
+	# 	files = [os.path.join(MODEL_FOLDER,modelset)]
+	# elif os.path.exists(os.path.join(ALT_MODEL_FOLDER,modelset))==True: 
+	# 	files = [os.path.join(ALT_MODEL_FOLDER,modelset)]
+	# elif os.path.exists('{}{}_{}.h5'.format(file_prefix,modelset,instrument))==True: 
+	# 	files = ['{}{}_{}.h5'.format(file_prefix,modelset,instrument)]
+	# elif os.path.exists(os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument)))==True: 
+	# 	files = [os.path.join(MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))]
+	# elif os.path.exists(os.path.join(ALT_MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument)))==True: 
+	# 	files = [os.path.join(ALT_MODEL_FOLDER,'{}{}_{}.h5'.format(file_prefix,modelset,instrument))]
+	# if len(files)==0:
+	# 	files = glob.glob('{}{}_{}*.h5'.format(file_prefix,modelset,instrument))
+	# if len(files)==0:
+	# 	files = glob.glob(os.path.join(MODEL_FOLDER,'{}{}_{}*.h5'.format(file_prefix,modelset,instrument)))
+	# if len(files)==0:
+	# 	files = glob.glob('{}{}_{}*.h5'.format(file_prefix,modelset,instrument))
+	# if verbose==True: print('Using model data file {}'.format(file))
+	# if os.path.exists(file)==False:
+	# 	print('WARNING: model set file for {} cannot be found, check your file name'.format(modelset))
+	# 	modelInfo()
+	# 	raise ValueError
+
+	for i,f in enumerate(files):
+		if verbose==True: print('Reading in file {}'.format(f))
+		if '.h5' in f: mdl = pandas.read_hdf(f)
+		elif '.csv' in f: mdl = pandas.read_csv(f)
+		elif '.xls' in f: mdl = pandas.read_excel(f)
+		else: raise ValueError('Cannot read in file {}; pass an .h5, .csv, or .xls[x] file'.format(f))
+		if i==0: models = copy.deepcopy(mdl)
+		else:
+# check that dataframes can be combined
+			if len(models.columns) == len(mdl.columns):
+				models = pandas.concat([models,mdl],axis=0)
+				models.reset_index(inplace=True,drop=True)
+			else:
+				if verbose==True: print('Warning! File {} has a different format than other prior file {}; returning what was read in up to this point'.format(f,files[i-1]))
+				break
+		cols = list(models.columns)
+		cols.remove('flux')
+		models.drop_duplicates(subset=cols,inplace=True,ignore_index=True)
+
+#	models = readModelSet(file,verbose=verbose)
 
 # read in appropriate wave file
 # NOTE: currently raises error of no wave file - could make this optional and not return a wave file
-	wfile = ''
+	files = []
 	if wavefile!='':
-		if os.path.exists(wavefile)==True: wfile=copy.deepcopy(wavefile)
-		elif os.path.exists(os.path.join(MODEL_FOLDER,wavefile))==True: 
-			wfile=os.path.join(MODEL_FOLDER,wavefile)
-		else: 
-			if verbose==True: print('WARNING: Could not locate wavelength file {}; going with instrument {}'.format(wavefile,instrument))
-	if wfile=='': 
-		wfile = os.path.join('{}{}.csv'.format(wave_prefix,instrument))
-		if os.path.exists(wfile)==False: 
-			wfile = os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument))
-	if os.path.exists(wfile)==False:
-		print('Could not locate wavelength file for {}; please pass a direct filename'.format(instrument))
-		files = glob.glob(os.path.join(MODEL_FOLDER,'{}.csv'.format(wave_prefix)))
+		if verbose==True: print('Searching {}'.format(wavefile))
+		files = glob.glob(wavefile)
+		if len(files) == 0:
+			if verbose==True: print('Searching {}'.format(os.path.join(MODEL_FOLDER,wavefile)))
+			files = glob.glob(os.path.join(MODEL_FOLDER,wavefile))
+		if len(files) == 0:
+			if verbose==True: print('Searching {}'.format(os.path.join(ALT_MODEL_FOLDER,wavefile)))
+			files = glob.glob(os.path.join(ALT_MODEL_FOLDER,wavefile))
+	if len(files) == 0:
+		if verbose==True: print('WARNING: Could not locate wavelength file {}; going with instrument {}'.format(wavefile,instrument))
+		if verbose==True: print('Searching {}'.format('{}{}.csv'.format(wave_prefix,instrument)))
+		files = glob.glob('{}{}.csv'.format(wave_prefix,instrument))
+	if len(files) == 0:
+		if verbose==True: print('Searching {}'.format(os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument))))
+		files = glob.glob(os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument)))
+	if len(files) == 0:
+		if verbose==True: print('Searching {}'.format(os.path.join(ALT_MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument))))
+		files = glob.glob(os.path.join(ALT_MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument)))
+	if len(files) == 0:
+		print('Could not locate wavelength file for instrument {}; please pass an appropriate wave .csv file'.format(instrument))
+		files = glob.glob(os.path.join(MODEL_FOLDER,'{}*.csv'.format(wave_prefix)))
 		if len(files) > 0: 
 			print('Available wavelength grids:')
 			for f in files: print('\t{}'.format(os.path.basename(f)))
 		raise ValueError
-	wave = readWave(wfile,verbose=verbose)
+
+	# if os.path.exists(wavefile)==True: wfile=copy.deepcopy(wavefile)
+	# 	elif os.path.exists(os.path.join(MODEL_FOLDER,wavefile))==True: 
+	# 		wfile=os.path.join(MODEL_FOLDER,wavefile)
+	# 	else: 
+	# 		if verbose==True: print('WARNING: Could not locate wavelength file {}; going with instrument {}'.format(wavefile,instrument))
+	# if wfile=='': 
+	# 	wfile = os.path.join('{}{}.csv'.format(wave_prefix,instrument))
+	# 	if os.path.exists(wfile)==False: 
+	# 		wfile = os.path.join(MODEL_FOLDER,'{}{}.csv'.format(wave_prefix,instrument))
+	# if os.path.exists(wfile)==False:
+	# 	print('Could not locate wavelength file for {}; please pass a direct filename'.format(instrument))
+	# 	files = glob.glob(os.path.join(MODEL_FOLDER,'{}.csv'.format(wave_prefix)))
+	# 	if len(files) > 0: 
+	# 		print('Available wavelength grids:')
+	# 		for f in files: print('\t{}'.format(os.path.basename(f)))
+	# 	raise ValueError
+	if verbose==True: print('Reading in {}'.format(files[0]))
+	wave = readWave(files[0],verbose=verbose)
 
 	return models, wave
 
 
 # GENERATE A MODEL SET
-# note that this routine requires the splat.model package
-def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instrument='RAW',
-	method='integrate',doresample=True,smooth=0,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
+# note that this routine currently requires the splat.model package
+def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instrument='RAW',smooth=2,
+	doresample=True,method='integrate',nstep=10,flux_name=DEFAULT_FLUX_NAME,file_prefix=MODEL_FILE_PREFIX,
 	save_wave=False,wave_prefix=WAVE_FILE_PREFIX,verbose=ERROR_CHECKING):
 	'''
 	Purpose
@@ -3171,6 +4143,12 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 		Name of the instrument for which the models and wavelength grid should be computed; by default this
 		is 'RAW' 
 
+	doresample = True : bool
+		Set to True to resample the spectral data onto the provided wavelength vector
+
+	smooth = 2 : int
+		pixel scale over which to do additional (boxcar) smoothing
+
 	method = 'integrate': str
 		The method by which to interpolate the origial model set onto the wavelength grid  (used by `resample`); options are:
 		* 'integrate': flux in integrated across wach wavelength grid point (also 'int'; DEFAULT)
@@ -3179,8 +4157,8 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
 		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
 
-	smooth = 1 : int
-		pixel scale over which to do additional (boxcar) smoothing (used by `resample`)
+	nstep = 10 : int
+		Number of intermediate steps to report completion
 
 	file_prefix = MODEL_FILE_PREFIX : str
 		Optional parameter providing the default output file name prefix for the resulting .h5 model files
@@ -3197,8 +4175,8 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 	Outputs
 	-------
 	
-	Returns True of model generation was successful, otherwise returns an error message
-	Saves the model parameters and interpolated surface fluxes to the .h5 file corresponding to the provided file_prefix
+	Returns True if model generation was successful, otherwise returns an error message
+	Saves the model parameters and interpolated surface fluxes into .h5 file(s) corresponding to the provided file_prefix
 	Optionally saves the wavelength array (in micron) to the .csv file corresponding to the provided wave_prefix
 
 	Example
@@ -3268,7 +4246,6 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 				raise ValueError('Unable to locate the file {} in the modelpars input variable'.format(modelpars.loc[0,'file']))
 			else: modelpars['file'] = [os.path.join(modelset,x) for x in modelpars['file']]
 
-
 # or go through SPLAT path
 	else:
 # check modelset name
@@ -3306,10 +4283,13 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 						modelpars.reset_index(inplace=True,drop=True)
 # continuous variables
 			else:
-				if verbose==True: print('Constraining {} to {} to {}'.format(k,constraints[k][0],constraints[k][1]))
-				modelpars = modelpars[modelpars[k]>=constraints[k][0]]
-				modelpars = modelpars[modelpars[k]<=constraints[k][1]]
+				if verbose==True: print('Constraining {} to {} to {}'.format(k,np.nanmin(constraints[k]),np.nanmax(constraints[k])))
+				modelpars = modelpars[modelpars[k]>=np.nanmin(constraints[k])]
+				modelpars = modelpars[modelpars[k]<=np.nanmax(constraints[k])]
 				modelpars.reset_index(inplace=True,drop=True)
+	if len(modelpars)==0: 
+		if verbose==True: print('No models or process, quitting')
+		return
 	if verbose==True: print('Processing {:.0f} {} models'.format(len(modelpars),mset))
 
 
@@ -3337,18 +4317,48 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 
 # read in the models trying a few different methods
 	pars = []
-	step = np.ceil(len(modelpars)/10.)
+#	cntr = 1
+	step = np.ceil(len(modelpars)/nstep)
+	tracemalloc.start()
+	start_time = time.perf_counter()
+	dpo = pandas.DataFrame()
 #	for i in tqdm(range(len(modelpars))):
+	print('\tStarting...',end='\r')
 	for i in range(len(modelpars)):
-		if np.mod(i,step)==0 and verbose==True: print('\t{:.0f}% complete'.format(i/step*10),end='\r')
-		par = dict(modelpars.loc[i,:])
+		if i>0 and np.mod(i,step)==0 and verbose==True: 
+			_,mem = tracemalloc.get_traced_memory()
+			inter_time = time.perf_counter()
+			used_time = inter_time-start_time	
+			left_time = used_time*(len(modelpars)-i)/i
+			print('\t{:.0f}% complete, memory usage = {:.2f} Gb, time used {:.1f} min, to go {:.1f} min'.format(100*i/len(modelpars),mem/1.e9,used_time/60.,left_time/60.),end='\r')
 
+# insert break due to large number of models
+		# if i != 0 and np.mod(i,int(nlarge))==0:
+		# 	outfile = '{}_{}.h5'.format(file_prefix,int(cntr))
+		# 	if verbose==True: print('Saving intermediate hdf file {}'.format(outfile))
+		# 	dpo = pandas.DataFrame(pars)
+		# 	for x in ['instrument','file']:
+		# 		if x in list(dpo.columns): del dpo[x]
+		# 	try: dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
+		# 	except: 
+		# 		print('Error in saving output to hdf file {}'.format(outfile))
+		# 		return False
+		# 	_,mem = tracemalloc.get_traced_memory()	
+		# 	print('\t{:.0f}% complete, current memory usage = {:.2f} Mb'.format(100*i/len(modelpars),mem/1.e6),end='\r')
+		# 	del dpo, pars
+		# 	gc.collect()
+		# 	# tracemalloc.stop()
+		# 	# tracemalloc.start()
+		# 	pars = []
+		# 	cntr+=1
+#			print('ran reset at step {}, len of array is {}'.format(i,len(dpo)))
+
+		par = dict(modelpars.loc[i,:])
 # read in with splat.Spectrum
 		mdl = splat.Spectrum(modelpars.loc[i,'file'])
 		wv,flx = mdl.wave.value,mdl.flux.value
 # read in with spmdl.loadModel
 		if np.isfinite(np.nanmedian(flx))==False:
-			par = dict(modelpars.loc[i,:])
 			mdl = spmdl.loadModel(**par,force=True)
 			wv,flx = mdl.wave.value,mdl.flux.value
 # read in with splat.readSpectrum
@@ -3362,43 +4372,58 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 			else: delim=r'\s+'
 			dp = pandas.read_csv(modelpars.loc[i,'file'],delimiter=delim,names=['wave','flux'],comment='#')
 			wv,flx = dp['wave'],dp['flux']
+			del dp
 # don't know what to do
 #		print(modelpars.loc[i,'file'],len(flx))
 		# if np.isfinite(np.nanmedian(flx))==False:
 		# 	if verbose==True: print('Warning: problem reading in file {}; skipping'.format(modelpars.loc[i,'file']))
-		try:
+		# try:
+
 # resample if desired
-			if doresample==True:
-				mdl = Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
-				mdl.toWavelengths(wave0)
-				if smooth > 1: mdl.smooth(smooth)
+		if doresample==True:
+			mdl = Spectrum(wave=wv*DEFAULT_WAVE_UNIT,flux=flx*DEFAULT_FLUX_UNIT)
+			mdl.toWavelengths(wave0,verbose=True)
+			if smooth > 1: mdl.smooth(smooth)
 #				mdlsm = resample(mdl,wave0,smooth=smooth,method=method)
-				wv,flx = mdl.wave.value,mdl.flux.value
-			else:
-				if i==0: wave0 = copy.deepcopy(wv)
+			wv,flx = mdl.wave.value,mdl.flux.value
+		else:
+			if i==0: wave0 = copy.deepcopy(wv)
 
-			par[flux_name] = flx
-			pars.append(par)			
-		except:
-			if verbose==True: print('Warning: problem reading in file {}; skipping'.format(modelpars.loc[i,'file']))
+		par[flux_name] = flx
+		pars.append(par)
+		del wv,flx,mdl,par
+		gc.collect()
+		# except:
+		# 	if verbose==True: print('Warning: problem reading in file {}; skipping'.format(modelpars.loc[i,'file']))
 
+	_,mem = tracemalloc.get_traced_memory()	
+	final_time = time.perf_counter()
+	used_time = final_time-start_time	
+	print('\tComplete: total memory usage = {:.2f} Gb, time used {:.1f} min\n'.format(mem/1.e9,used_time/60.))
+#	print('\t{:.0f}% complete, current memory usage = {:.2f} Gb'.format(100*i/len(modelpars),mem/1.e9),end='\r')
+	tracemalloc.stop()
 
-# save the models
-	outfile = file_prefix+'.h5'
+# save the models	
+	outfile = '{}.h5'.format(file_prefix)
+	if verbose==True: print('Saving hdf file {}'.format(outfile))
 	dpo = pandas.DataFrame(pars)
 	for x in ['instrument','file']:
 		if x in list(dpo.columns): del dpo[x]
-	if verbose==True: print('Saving {} models to {}'.format(mset,outfile))
 	try: dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
 	except: 
-		print('WARNING: unable to write hdf file {}; returning wave grid and models as outputs'.format(outfile))
+		print('Error in saving output to hdf file {}'.format(outfile))
+		return False
+	del dpo, pars
+	gc.collect()
+
 	if save_wave==True: 
 		dpw = pandas.DataFrame()
 		dpw['wave'] = wv
 		outfile = wave_prefix+'.csv'
 		dpw.to_csv(outfile,index=False)
 		if verbose==True: print('Saving wavelength array to {}'.format(outfile))
-	return wv,dpo
+
+	return True
 
 
 # GET ONE OF THE GRID MODELS
@@ -3629,18 +4654,21 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 			smdls.reset_index(inplace=True,drop=True)
 		else:
 # continuous parameters			
+# changed this from downselect to parameter offset 
 #				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
+			valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+			step = np.nanmedian(valstep[1:])				
 			if par0[k] in vals:
-				smdls = smdls[smdls[k]==par0[k]]
+				# smdls = smdls[smdls[k]==par0[k]]
+				# smdls.reset_index(inplace=True,drop=True)
+				if par0[k]==np.nanmax(vals): par0[k]=par0[k]-0.01*step
+				else: par0[k]=par0[k]+0.01*step
+#			else:
+			limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
+			if step>0:
+				smdls = smdls[smdls[k]>=limits[k][0]]
+				smdls = smdls[smdls[k]<=limits[k][1]]													 
 				smdls.reset_index(inplace=True,drop=True)
-			else:
-				valstep = np.absolute(np.array(vals)-np.roll(vals,1))
-				step = np.nanmedian(valstep[1:])				
-				limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
-				if step>0:
-					smdls = smdls[smdls[k]>=limits[k][0]]
-					smdls = smdls[smdls[k]<=limits[k][1]]													 
-					smdls.reset_index(inplace=True,drop=True)
 # overselected - no models to interpolate
 		if len(smdls)==0: 
 			raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par0[k]))
@@ -3665,15 +4693,16 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 			parvals.append(par0[k])
 	parvals = np.array([parvals])
 	fitvals = np.transpose(np.vstack(fitvals))
-
+	# print(fitvals)
+	# print(parvals)
 # run interpolation
 	flx = []
 	for i in range(len(smdls.loc[0,flux_name])):
 		fs = [np.log10(x[i]) for x in smdls[flux_name]]
-		try: flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
+		try: 
+			flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
 		except: 
-			if verbose==True: print('getInterpModel failed for values '.format)
-			raise ValueError('Insufficient model coverage; try reducing parameter constraints')
+			raise ValueError('getInterpModel failed for values {}; try reducing parameter constraints'.format(par0))
 	flx = np.array(flx)
 	flx = 10.**flx
 	if np.isnan(np.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
@@ -4041,7 +5070,7 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 				mdls.reset_index(inplace=True,drop=True)
 	mset = mdls.loc[0,'model']
 	mkys = list(mdls.keys())
-	for x in ['model',flux_name]:
+	for x in ['model','file',flux_name]:
 		if x in mkys: mkys.remove(x)
 
 # if no or incomplete fit parameters, conduct an initial grid fit
@@ -4153,7 +5182,7 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 #		pnew = pnew | pfitd
 		try:
 			cmdl = getModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
-			if verbose==True: print(i,pnew)
+#			if verbose==True: print(i,pnew)
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 			# if np.isnan(radius)==False and np.isnan(e_radius)==False:
 			#	 chinew+=(((10.*u.pc*(scl**0.5)).to(u.Rsun).value-radius)/e_radius)**2
@@ -4337,13 +5366,14 @@ def fitEMCEE(spc,models,p0={},plimits={},output='all',
 ####################################################
 
 # PLOT COMPARISON OF TWO SPECTRA
-def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
+def plotCompare(sspec,cspec,outfile='',olabel='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
 	figsize=[8,5],height_ratio=[5,1],scale=1.,fontscale=1,xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',
 	ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 
 	sspec.scale(scale)
 	cspec.scale(scale)
 	diff = sspec.flux.value-cspec.flux.value
+	if olabel=='': olabel=sspec.name
 
 	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
 	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
@@ -4353,7 +5383,7 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 
 	plt.clf()
 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
-	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
+	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=4,alpha=0.5,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
 	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
@@ -4393,7 +5423,7 @@ def plotCompare(sspec,cspec,outfile='',clabel='Comparison',absolute=False,xscale
 
 # PLOT COMPARISON OF SPECTRUM AND BEST MCMC FIT, ALONG WITH SAMPLING OF CHAIN
 def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
-	clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,plot_scale=1.,
+	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,plot_scale=1.,
 	residual_plot_scale=-1.,xscale='linear',yscale='linear',figsize=[8,5],height_ratio=[5,1],
 	drawalpha=0.3,fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
 # parameter check
@@ -4405,6 +5435,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	strue = spec.wave.value[np.isnan(spec.flux.value)==False]
 	wrng = [np.nanmin(strue),np.nanmax(strue)]
 	if nsample<0: nsample = int(len(chain)/10)
+	if olabel=='': olabel=sspec.name
 
 # first identify the best fit model
 	pbest = dict(chain.loc[np.argmin(chain['chis']),:])
@@ -4444,7 +5475,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=0.2)
 	else:
 		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=drawalpha)
-	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=sspec.name)
+	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
 	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
@@ -4589,165 +5620,4 @@ def plotCorner(dpfit,plotpars=[],pbest={},weights=[],outfile='',verbose=ERROR_CH
 ####################################################
 ####################################################
 ####################################################
-
-# RESAMPLE SPECTRUM ONTO A NEW WAVELENGTH SCALE
-# NOTE: THIS FUNCTION WILL BE MADE OBSELETE BY .TOWAVELENGTHS
-def resample(sp,wave,method='weighted integrate',wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,default_noise=np.nan,smooth=1,verbose=ERROR_CHECKING):
-	'''
-	
-	Purpose
-	-------
-
-	Resamples a spectrum onto a wavelength grid with optional smoothing
-
-	Parameters
-	----------
-
-	sp : splat.Spectrum class
-		splat Spectrum object to resample onto wave grid
-
-	wave : np.ndarray or list
-		wave grid to resample spectrum onto; if unitted, this is converted to units specified in `wave_unit`, 
-		otherwise assumed to be in the units of `wave_unit`
-
-	method = 'integrate' : str
-		Method by which spectrum is resampled onto new wavelength grid; options are:
-		* 'integrate': flux in integrated across wach wavelength grid point (also 'int')
-		* 'weighted integrate' (default): weighted integration, where weights are equal to 1/uncertainty**2 (also 'wint')
-		* 'mean': mean value in each wavelength grid point is used (also 'average', 'mn', 'ave')
-		* 'weighted mean': weighted mean value with weights are equal to 1/uncertainty**2 (also 'wmn', 'weighted')
-		* 'median': median value in each wavelength grid point is used (also 'wmn', 'weighted')
-
-	default_noise = np.nan : int or float
-		default noise value if not provided in noise array
-
-	smooth = 1 : int
-		pixel scale over which to do additional (boxcar) smoothing
-
-	verbose = ERROR_CHECKING : bool
-		Set to True to return verbose output
-
-	Outputs
-	-------
-	
-	Returns a spectrum object in which the orginal spectrum has been resampled onto the given wave grid, 
-	with additional smoothing if noted. 
-
-	Example
-	-------
-
-	>>> import splat
-	>>> import ucdmcmc
-	>>> sp1,sp2 = splat.getSpectrum(spt='T5')[:2] # grabs 2 T5 spectra from SPLAT library
-	>>> sp2.toWavelengths(sp1.wave)
-	>>> ucdmcmc.compareSpec(sp1.flux.value,sp2.flux.value,sp1.noise.value)
-	(16279.746979311662, 0.9281232247150684, 561)
-
-	Dependencies
-	------------
-		
-	`isUnit()`
-	splat
-	
-
-	'''
-# prepare input flux
-#	 if isUnit(flux): flx0=flux.to(flux_unit).value
-#	 else: flx0 = np.array(copy.deepcopy(flux))
-
-# # prepare input uncertainty
-#	 if isUnit(noise): unc0=noise.to(flux_unit).value
-#	 else: unc0 = np.array(copy.deepcopy(noise))
-#	 if len(noise)==0: 
-#		 if isUnit(default_noise): dns=default_noise.to(flux_unit).value
-#		 else: dns = np.array(copy.deepcopy(default_noise))
-#		 unc0 = np.array([dns]*len(flx0))
-
-# # prepare input wavelength grid
-#	 if isUnit(wave0): wv0=wave0.to(wave_unit).value
-#	 else: wv0 = np.array(copy.deepcopy(wave0))
-
-	print('Warning: resample() will be deprecated in a future release, please use Spectrum.toWavelengths() instead')
-
-# prepare output wavelength grid
-	if isUnit(wave): wv=wave.to(sp.wave.unit).value
-	else: wv = np.array(copy.deepcopy(wave))
-	wshift = 2.*np.absolute(np.nanmedian(np.roll(wv,-1)-wv))
-
-
-# trim if necessary
-#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),np.nanmin(wv),np.nanmax(wv))
-	sp.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
-#	print(np.nanmin(sp.wave.value),np.nanmax(sp.wave.value),len(sp.wave))
-	# wv0 = wv0[wtr]
-	# flx0 = flx0[wtr]
-	# unc0 = unc0[wtr]
-	# wtr = np.where(np.logical_and(wv0>=wv[0]-3.*wshift,wv0<=wv[0]+3.*wshift))
-	# if len(wv0[wtr])==0:
-	#	 raise ValueError('Input wavelength grid {:.2f}-{:2f} does not overlap with new input wavelength grid {:.2f}-{:.2f}'.format(np.nanmin(wv0),np.nanmax(wv0),np.nanmin(wv),np.nanmax(wv)))
-
-# prepare spectrum object
-	# spc = copy.deepcopy(sp)
-	# spc.trim([wv[0]-3.*wshift,wv[-1]+3.*wshift])
-
-# run interpolation
-	flx = [np.nan]*len(wv)
-	unc = [np.nan]*len(wv)
-	smind = int(smooth)
-	for i,w in enumerate(wv):
-		if i<smind: wrng = [w-(wv[smind]-w),wv[smind]]
-		elif i>=len(wave)-smind: wrng = [wv[i-smind],w+(w-wv[i-smind])]
-		else: wrng = [wv[i-smind],wv[i+smind]]
-		wsel = np.where(np.logical_and(sp.wave.value>=wrng[0],sp.wave.value<=wrng[1]))
-		cnt = len(sp.wave.value[wsel])
-# expand range
-		if cnt <= 1:
-			wsel = np.where(np.logical_and(sp.wave.value>=wrng[0]-wshift,sp.wave.value<=wrng[1]+wshift))
-			cnt = len(sp.wave.value[wsel])
-		if cnt >= 1:
-			flx0s = sp.flux.value[wsel]
-			unc0s = sp.noise.value[wsel]
-			wv0s = sp.wave.value[wsel]
-			wn = np.where(~np.isnan(flx0s))
-			if len(flx0s[wn])>0:
-				if method.lower() in ['mean','mn','average','ave']:
-					flx[i] = np.nanmean(flx0s[wn])
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = np.nanmean(unc0s[wn])/((len(unc0s[wn])-1)**0.5)
-				elif method.lower() in ['weighted mean','wmn','weighted']:
-					wts = 1./unc0s[wn]**2
-					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
-					flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-				elif method.lower() in ['integrate','int']:
-					wts = np.ones(len(wv0s[wn]))
-					if cnt > 1: 
-						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
-					else:
-						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-				elif method.lower() in ['weighted integrate','wint']:
-					wts = 1./unc0s[wn]**2
-					if np.isnan(np.nanmin(wts))==True: wts = np.ones(len(wv0s[wn]))
-					if cnt > 1: 
-						flx[i] = np.trapz(wts*flx0s[wn],wv0s[wn])/np.trapz(wts,wv0s[wn])
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.trapz(wts*unc0s[wn]**2,wv0s[wn])/np.trapz(wts,wv0s[wn]))**0.5
-					else:
-						flx[i] = np.nansum(wts*flx0s[wn])/np.nansum(wts)
-						if np.isfinite(np.nanmax(unc0s))==True: unc[i] = (np.nansum(wts*unc0s[wn]**2)/np.nansum(wts))**0.5
-					# unc[i] = (np.trapz(np.ones(len(wv0[wn])),wv0[wn])/np.trapz(1/unc0[wn]**2,wv0[wn]))**0.5
-					# flx[i] = np.trapz(flx0[wn],wv0[wn])/np.trapz(np.ones(len(wv0[wn])),wv0[wn])
-# median by default
-				else:
-					flx[i] = np.nanmedian(flx0s[wn])
-					if np.isfinite(np.nanmax(unc0s))==True: unc[i] = flx[i]/np.nanmedian(flx0s[wn]/unc0s[wn])
-		# else:
-		#	 print('no wavepoints in {:.2f}-{:.2f}'.format(wrng[0],wrng[1]))
-#					unc[i] = np.nanmedian(unc0[wn])/((len(unc0[wn])-1)**0.5)
-
-# return flux
-	# return flx*flux_unit
-
-# return Spectrum object
-	return Spectrum(wave=np.array(wv)*sp.wave.unit,flux=flx*sp.flux.unit,noise=unc*sp.flux.unit,name=sp.name)
 

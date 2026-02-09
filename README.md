@@ -23,7 +23,10 @@ It is recommended that you install in a conda environment to ensure the dependen
 A check that this worked is that you can import `ucdmcmc` into python/jupyter noteobook, and that the `ucdmcmc.MODEL_FOLDER` points to the models folder that was downloaded
 
 `ucdmcmc` uses the following external packages:
+<<<<<<< HEAD
 
+=======
+>>>>>>> 28eedbb (minor updates)
 * `astropy`: https://www.astropy.org/
 * `astroquery`: https://astroquery.readthedocs.io/en/latest/
 * `corner`: https://corner.readthedocs.io/en/latest/
@@ -176,7 +179,7 @@ There are many variations to these fits, as well as secondary parameters (e.g., 
 
 ## Citing the code
 
-If you use this code in your research, publications, or presentatinos, please include the following citation:
+If you use this code in your research, publications, or presentations, please include the following citation:
 
 	Burgasser, Brooks, Morrissey, Haynes, & Liou (2025). aburgasser/ucdmcmc (vXXX). Zenodo. https://doi.org/10.5281/zenodo.16921710
 
