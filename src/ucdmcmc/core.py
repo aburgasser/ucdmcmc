@@ -65,6 +65,8 @@ import copy
 import glob
 import gc
 import os
+import re
+import requests
 import sys
 import time
 import tracemalloc
@@ -80,8 +82,8 @@ import emcee
 import matplotlib.pyplot as plt
 import numpy as np
 np.seterr(all="ignore")
+from packaging.version import parse
 import pandas
-import requests
 from scipy.interpolate import griddata,interp1d
 from scipy import stats, signal
 import spectres # https://ui.adsabs.harvard.edu/abs/2017arXiv170505165C/abstract
@@ -96,7 +98,7 @@ from tqdm import tqdm
 
 
 # reference parameters
-VERSION = '2026.02.05'
+VERSION = '2026.04.03'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
@@ -119,6 +121,7 @@ DEFAULT_FNU_UNIT = u.Jy
 DEFAULT_WAVE_NAME = 'wave'
 DEFAULT_FLUX_NAME = 'flux'
 DEFAULT_NOISE_NAME = 'noise'
+WHITESPACE = re.compile(r'\s+')
 
 # baseline wavelength grid
 DEFAULT_WAVE_RANGE = [1.,5.]
@@ -139,14 +142,14 @@ PARAMETERS = {
 	'kzz': {'type': float,'label': r'$\log\kappa_\mathrm{zz}$ (cm$^2$/s)','fmt': '{:.2f}','step':0.25,'altname': ['mix','mixing','k'],'default': 4.,'limits':[0,20]},
 	'fsed': {'type': float,'label': r'$f_\mathrm{sed}$','fmt': '{:.2f}','step':0.25,'altname': ['sed','sedimentation','f'],'default': 4.,'limits':[0,20]},
 	'cld': {'type': str,'label': 'Cloud Model','fmt': '{}','step':-99,'altname': ['cloud','c'],'default': '','limits':[]},
-	'mlt': {'type': str,'label': 'Mixing Length Scale','fmt': '{:.1f}','step':-99,'altname': ['ml'],'default': 1.0,'limits':[]},
+	'mlt': {'type': str,'label': 'Mixing Length Scale','fmt': '{:.1f}','step':0.1,'altname': ['ml'],'default': 1.0,'limits':[]},
 	'broad': {'type': str,'label': 'Pressure Line Broadening','fmt': '{}','step':-99,'altname': ['brd','b'],'default': '','limits':[]},
 	'ad': {'type': float,'label': r'$\gamma$','fmt': '{:.3f}','step':0.01,'altname': ['diffusion','diff','adiabat','gamma'],'default': 1.0,'limits':[0,2]},
 	'av': {'type': float,'label': r'$A_V$','fmt': '{:.2f}','step':0.01,'altname': ['reddening','extinction','ext','red'],'default': 0.,'limits':[0,1000]},
 	'pshift': {'type': float,'label': r'$\Delta$p','fmt': '{:.2f}','step':0.01,'altname': ['pixel shift','pixshift','delta pixel','dpix','dp'],'default': 0.,'limits':[-1000,1000]},
 	'wshift': {'type': float,'label': r'$\Delta\lambda$ (Ang)','fmt': '{:.2f}','step':0.01,'altname': ['wave shift','delta wave','dwave','dw'],'default': 0.,'limits':[-1000,1000]},
 	'rv': {'type': float,'label': r'RV (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['radial velocity','velocity','vrad'],'default': 0.,'limits':[-3000,3000]},
-	'vsini': {'type': float,'label': r'$v\sin{i}$ (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['rotational velocity','rotation','rot','vrot'],'default': 0.,'limits':[0,1000]},
+	'vsini': {'type': float,'label': r'$vsin{i}$ (km/s)','fmt': '{:.1f}','step':0.1,'altname': ['rotational velocity','rotation','rot','vrot'],'default': 0.,'limits':[0,1000]},
 	'lsf': {'type': float,'label': r'LSF ($\mu$m)','fmt': '{:.3f}','step':1.e-4,'altname': ['line spread function','line broadening','broadening'],'default': 0.,'limits':[0,10]},
 	'foff': {'type': float,'label': r'$\epsilon_f$','fmt': '{:.2f}','step':0.01,'altname': ['flux shift','flux offset','dflux','eflux','df','ef'],'default': 0.,'limits':[-10,10]},
 	'telluric': {'type': float,'label': r'$\alpha$','fmt': '{:.2f}','step':0.01,'altname': ['tellabs','tell'],'default': 0.,'limits':[0,10]},
@@ -161,23 +164,28 @@ for x in list(PARAMETERS.keys()): DEFAULT_MCMC_STEPS[x] = PARAMETERS[x]['step']
 
 # instruments
 DEFINED_INSTRUMENTS = {
-	'NIR': {'instrument_name': 'Generic near-infrared (0.9-2.45 micron at R = 300)', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D', 'absolute': False},
-	'OIR': {'instrument_name': 'Generic optical and infrared (0.3-30 micron at R = 300)', 'altname': ['OPTICAL-INFRARED','O-IR'], 'wave_range': [0.3,30]*u.micron, 'resolution': 300, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': False},
-	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'bibcode': '2025A%26A...697A...3E', 'sample': 'EUCLID_J0359-4740_Dominguez-Tagle2025.csv','sample_name': 'EUCLID J0359-4740', 'sample_bibcode': '2025ApJ...991...84D', 'absolute': False},
-	'FIRE-PRISM': {'instrument_name': 'FIRE Prism', 'altname': ['FIRE-LR'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 250, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-PRISM_Ross458C_Burgasser2010.csv','sample_name': 'Ross 458C', 'sample_bibcode': '2010ApJ...725.1405B', 'absolute': True},
-	'FIRE-ECHELLE': {'instrument_name': 'FIRE Echelle', 'altname': ['FIRE'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 6000, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-ECHELLE_J0722-0540_Bochanski2011.csv','sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2011AJ....142..169B', 'absolute': True},
-	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-PRISM_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
-	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-G395H_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
-	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-MIRI-LRS_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
-	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
-	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'bibcode': '2000SPIE.4008.1048M', 'sample': 'KECK-NIRES_J0722-0540_Theissen2022.csv', 'sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2022RNAAS...6..151T', 'absolute': True},
+	'NIR': {'instrument_name': 'Generic near-infrared (0.9-2.45 micron at R = 300)', 'altname': ['NEAR-INFRARED','IR'], 'wave_range': [0.9,2.45]*u.micron, 'resolution': 300, 'npix': 2, 'bibcode': '', 'sample': 'NIR_TRAPPIST1_Davoudi2024.csv','sample_name': 'TRAPPIST-1', 'sample_bibcode': '2024ApJ...970L...4D', 'absolute': False},
+	'OIR': {'instrument_name': 'Generic optical and infrared (0.3-30 micron at R = 300)', 'altname': ['OPTICAL-INFRARED','O-IR'], 'wave_range': [0.3,30]*u.micron, 'resolution': 300, 'npix': 2, 'bibcode': '', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': False},
+	'EUCLID': {'instrument_name': 'EUCLID NISP', 'altname': ['EUC'], 'wave_range': [0.9,1.9]*u.micron, 'resolution': 350, 'npix': 2, 'bibcode': '2025A%26A...697A...3E', 'sample': 'EUCLID_J0359-4740_Dominguez-Tagle2025.csv','sample_name': 'EUCLID J0359-4740', 'sample_bibcode': '2025ApJ...991...84D', 'absolute': False},
+	'FIRE-PRISM': {'instrument_name': 'FIRE Prism', 'altname': ['FIRE-LR'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 250, 'npix': 2, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-PRISM_Ross458C_Burgasser2010.csv','sample_name': 'Ross 458C', 'sample_bibcode': '2010ApJ...725.1405B', 'absolute': True},
+	'FIRE-ECHELLE': {'instrument_name': 'FIRE Echelle', 'altname': ['FIRE'], 'wave_range': [0.8,2.5]*u.micron, 'resolution': 6000, 'npix': 2, 'bibcode': '2013PASP..125..270S', 'sample': 'FIRE-ECHELLE_J0722-0540_Bochanski2011.csv','sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2011AJ....142..169B', 'absolute': True},
+	'JWST-NIRSPEC-PRISM': {'instrument_name': 'JWST NIRSpec (prism mode)', 'altname': ['JWST-NIRSPEC','NIRSPEC'], 'wave_range': [0.6,5.3]*u.micron, 'resolution': 150, 'npix': 2, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-PRISM_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
+	'JWST-NIRSPEC-G395H': {'instrument_name': 'JWST NIRSpec (G395H mode)', 'altname': ['G395H','NIRSPEC-G395H'], 'wave_range': [2.8,5.2]*u.micron, 'resolution': 2000, 'npix': 2, 'bibcode': '2022A%26A...661A..82B', 'sample': 'JWST-NIRSPEC-G395H_Wolf1130C_Burgasser2025.csv','sample_name': 'Wolf 1130C', 'sample_bibcode': '2025Sci...390..697B', 'absolute': True},
+	'JWST-MIRI-LRS': {'instrument_name': 'JWST MIRI (LRS mode)', 'altname': ['MIRI','JWST-MIRI'], 'wave_range': [4.6,13.5]*u.micron, 'resolution': 150, 'npix': 2, 'bibcode': '', 'sample': 'JWST-MIRI-LRS_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
+	'JWST-NIRSPEC-MIRI': {'instrument_name': 'JWST NIRSpec (prism mode) + MIRI (LRS mode)', 'altname': ['NIRSPEC-MIRI','JWST-LOWRES'], 'wave_range': [0.8,12.2]*u.micron, 'resolution': 150, 'npix': 2, 'bibcode': '', 'sample': 'JWST-NIRSPEC-MIRI_J1624+0029_Beiler2024.csv','sample_name': 'SDSS J1624+0029', 'sample_bibcode': '2024ApJ...973..107B', 'absolute': True},
+	'KECK-NIRES': {'instrument_name': 'Keck NIRES', 'altname': ['NIRES'], 'wave_range': [0.94,2.45]*u.micron, 'resolution': 2700, 'npix': 2, 'bibcode': '2000SPIE.4008.1048M', 'sample': 'KECK-NIRES_J0722-0540_Theissen2022.csv', 'sample_name': 'UGPS J0722-0540', 'sample_bibcode': '2022RNAAS...6..151T', 'absolute': True},
 #	'KECK-LRIS-RED': {'instrument_name': 'Keck LRIS Red', 'altname': ['LRIS','LRIS-RED'], 'wave_range': [0.55,1.0]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
 #	'KECK-LRIS-BLUE': {'instrument_name': 'Keck LRIS Blue', 'altname': ['LRIS-BLUE'], 'wave_range': [0.3,0.6]*u.micron, 'resolution': 3000, 'bibcode': '', 'sample': '','sample_bibcode': '', 'absolute': False},
-	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B', 'absolute': True},
-	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-SXD_J0559-1404_Cushing2005.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2005ApJ...623.1115C', 'absolute': True},
+	'ROMAN-GRISM': {'instrument_name': 'Roman Grism (G150)', 'altname': ['ROMAN-G150','NGRST-GRISM','ROMAN-G'], 'wave_range': [1,1.93]*u.micron, 'resolution': 450, 'npix': 2, 'bibcode': '2024JATIS..10a4003B', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': True},
+	'ROMAN-PRISM': {'instrument_name': 'Roman Prism (P127)', 'altname': ['ROMAN-P127','NGRST-PRISM','ROMAN-P'], 'wave_range': [0.75,1.80]*u.micron, 'resolution': 130, 'npix': 2, 'bibcode': '2024JATIS..10a4003B', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': True},
 #	'SHANE-KAST-BLUE': {'instrument_name': 'Shane Kast Red', 'altname': ['KAST','KAST-RED'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
 #	'SHANE-KAST-RED': {'instrument_name': 'Shane Kast Blue', 'altname': ['KAST-BLUE'], 'wave_range': [0.3,1.0]*u.micron, 'resolution': 1800, 'bibcode': '', 'sample': '','sample_bibcode': ''},
-	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': ['OIR'], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': '', 'absolute': False},
+	'SPEX-PRISM': {'instrument_name': 'IRTF SpeX prism', 'altname': ['SPEX'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 150, 'npix': 2, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-PRISM_J0559-1404_Burgasser2006.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2006ApJ...637.1067B', 'absolute': True},
+	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'npix': 2, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-SXD_J0559-1404_Cushing2005.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2005ApJ...623.1115C', 'absolute': True},
+	'SPHEREX': {'instrument_name': 'SPHEREx', 'altname': [''], 'wave_range': [0.75,5.0]*u.micron, 'resolution': 50, 'npix': 2, 'bibcode': '2020SPIE11443E..0IC', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': False},
+	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': [''], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'npix': 2, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': '', 'absolute': False},
+	'XSHOOTER-VIS': {'instrument_name': 'VLT/X-SHOOTER VIS band', 'altname': ['XVIS'], 'wave_range': [0.57,1.01]*u.micron, 'resolution': 13000, 'npix': 3, 'bibcode': '2011A&A...536A.105V', 'sample': 'XSHOOTER-VIS_J1256-6202_Zhang2019.csv','sample_name': 'VVV J12564163-6202039', 'sample_bibcode': '2019MNRAS.486.1840Z', 'absolute': False},
+	'XSHOOTER-NIR': {'instrument_name': 'VLT/X-SHOOTER NIR band', 'altname': ['XNIR'], 'wave_range': [1.00,2.45]*u.micron, 'resolution': 9600, 'npix': 3, 'bibcode': '2011A&A...536A.105V', 'sample': 'XSHOOTER-NIR_J1256-6202_Zhang2019.csv','sample_name': 'VVV J12564163-6202039', 'sample_bibcode': '2019MNRAS.486.1840Z', 'absolute': False},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -204,11 +212,11 @@ DEFINED_SPECTRAL_MODELS = {\
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
 	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 2., 'co': 0.85}}, \
-	'madhu11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 'eq','fsed': 'eq'}}, \
+	'madhu11': {'instruments': {}, 'name': 'Madhusudhan et al. (2011)', 'citation': 'Madhusudhan et al. (2011)', 'bibcode': '2011ApJ...737...34M', 'altname': ['madhu','madhusudhan','madhu11','madhu2011','madhusudhan2011'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0.,'cld': 'ae60', 'kzz': 2.,'fsed': 0.}}, \
 	'morley12': {'instruments': {}, 'name': 'Morley et al. (2012)', 'citation': 'Morley et al. (2012)', 'bibcode': '2012ApJ...756..172M', 'altname': ['morley','morley2012'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'fsed': 'f5'}}, \
 	'morley14': {'instruments': {}, 'name': 'Morley et al. (2014)', 'citation': 'Morley et al. (2014)', 'bibcode': '2014ApJ...787...78M', 'altname': ['morley2014'], 'default': {'teff': 300., 'logg': 5.0, 'z': 0., 'fsed': 'f5', 'cld': 'h50'}}, \
 	'newera25': {'instruments': {}, 'name': 'Phoenix New Era', 'citation': 'Hauschildt et al. (2025)', 'bibcode': '2025A%26A...698A..47H', 'altname': ['newera','hau25','phoenix-newera','phoenix25','phx25'], 'default': {'teff': 3000., 'logg': 5.0, 'z': 0., 'enrich': 0.0}}, \
-	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
+	'sand24': {'instruments': {}, 'name': 'SAND', 'citation': 'Alvarado et al. (2024)', 'bibcode': '2024RNAAS...8..134A', 'altname': ['sand','san24','sand2024','alv24','alvardo2024','ger24','gerasimov2024'], 'default': {'teff': 1500., 'logg': 5.0, 'z': 0.1, 'enrich': 0.0}}, \
 	'saumon12': {'instruments': {}, 'name': 'Saumon et al. (2012)', 'citation': 'Saumon et al. (2012)', 'bibcode': '2012ApJ...750...74S', 'altname': ['saumon','sau12'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sonora21': {'instruments': {}, 'name': 'Sonora Bobcat', 'citation': 'Marley et al. (2021)', 'bibcode': '2021ApJ...920...85M', 'altname': ['marley2021','sonora','sonora2021','bobcat','sonora-bobcat'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
 	'sphinx23': {'instruments': {}, 'name': 'SPHINX', 'citation': 'Iyer et al. (2023)', 'bibcode': '2023ApJ...944...41I', 'altname': ['sphinx2023','sphinx','iyer2023','iyer','iyer23'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1}}, \
@@ -680,7 +688,7 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 		* 'tex': latex file ==> '&'-delimited
 
 	delimiter = '' : str
-		Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace ('\s+') is assumed
+		Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace is assumed
 
 	hdunum = 0 : int
 		For fits files, the default fits level contained the data and header
@@ -795,7 +803,7 @@ def readSpectrum(file,wave_unit=DEFAULT_WAVE_UNIT,flux_unit=DEFAULT_FLUX_UNIT,di
 		elif 'pipe' in file_type and delimiter=='': delimiter = '|'
 		elif 'tex' in file_type and delimiter=='': delimiter = '&'
 # white space default
-		else: delimiter = r'\s+'
+		else: delimiter = WHITESPACE
 
 # initial read
 		dp = pandas.read_csv(file,delimiter=delimiter,comment=comment,header=0)
@@ -1087,7 +1095,7 @@ class Spectrum(object):
 			* 'tex': latex file ==> '&'-delimited
 
 		delimiter = '' : str
-			Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace ('\s+') is assumed
+			Specify to define or overrule default delimiter; if no delimiter specified or inferred from file, whitespace is assumed
 
 		hdunum = 0 : int
 			For fits files, the default fits level contained the data and header
@@ -1715,7 +1723,7 @@ class Spectrum(object):
 
 
 # mask spectra based on S/N limit
-	def maskSN(self,limit,action='remove',verbose=ERROR_CHECKING,**kwargs):
+	def maskSN(self,limit,action='replace',verbose=ERROR_CHECKING,**kwargs):
 		'''
 		Purpose
 		-------
@@ -1816,10 +1824,7 @@ class Spectrum(object):
 		'''
 
 # prep inputs
-		if len(args) > 0: filename = args[0]
-		filename = kwargs.get('file',filename)
 		if filename == '' and 'filename' in list(self.__dict__.keys()): filename = self.filename
-
 		if filename == '':
 			print('\nWarning! no filename provided, data were not saved')
 			return
@@ -1831,9 +1836,10 @@ class Spectrum(object):
 		if 'fit' in file_type:
 			data = np.vstack((self.wave.value,self.flux.value,self.noise.value))
 			hdu = fits.PrimaryHDU(data)
-			for k in list(self.header.keys()):
-				if k.upper() not in ['HISTORY','COMMENT','BITPIX','NAXIS','NAXIS1','NAXIS2','EXTEND'] and k.replace('#','') != '': # and k not in list(hdu.header.keys()):
-					hdu.header[k] = str(self.header[k])
+			if 'header' in list(self.__dict__.keys()):
+				for k in list(self.header.keys()):
+					if k.upper() not in ['HISTORY','COMMENT','BITPIX','NAXIS','NAXIS1','NAXIS2','EXTEND'] and k.replace('#','') != '': # and k not in list(hdu.header.keys()):
+						hdu.header[k] = str(self.header[k])
 			for k in list(self.__dict__.keys()):
 				if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and np.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
 					hdu.header[k.upper()] = str(self.__getattribute__(k))
@@ -1846,9 +1852,10 @@ class Spectrum(object):
 			if 'tex' in file_type: delimiter = ' & '
 			f = open(filename,'w')
 			if save_header == True:
-				for k in list(self.header.keys()):
-					if k.upper() not in ['HISTORY','COMMENT'] and k.replace('#','') != '':
-						f.write('{}{} = {}\n'.format(comment,k.upper(),self.header[k]))
+				if 'header' in list(self.__dict__.keys()):
+					for k in list(self.header.keys()):
+						if k.upper() not in ['HISTORY','COMMENT'] and k.replace('#','') != '':
+							f.write('{}{} = {}\n'.format(comment,k.upper(),self.header[k]))
 				for k in list(self.__dict__.keys()):
 					if isinstance(self.__getattribute__(k),str) == True or (isinstance(self.__getattribute__(k),float) == True and np.isnan(self.__getattribute__(k)) == False) or isinstance(self.__getattribute__(k),int) == True or isinstance(self.__getattribute__(k),bool) == True:
 						f.write('{}{} = {}\n'.format(comment,k.upper(),self.__getattribute__(k)))
@@ -1919,7 +1926,7 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("Jy")
 		'''
-		print('Warning: toFnu() will be depracted in a future version')
+		print('Warning: toFnu() will be deprecated in a future version')
 		self.fluxConvert(funit)
 		return
 
@@ -1950,7 +1957,7 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Unit("erg / (cm2 micron s)")
 		'''
-		print('Warning: toFlam() will be depracted in a future version')
+		print('Warning: toFlam() will be deprecated in a future version')
 		self.fluxConvert(funit)
 		return
 
@@ -2018,7 +2025,7 @@ class Spectrum(object):
 		   >>> sp.flux.unit
 			Warning! failed to convert flux unit from W / m2 to erg / s; no change made
 		'''
-		print('Warning: toFluxUnit() will be depracted in a future version')
+		print('Warning: toFluxUnit() will be deprecated in a future version')
 		self.fluxConvert(funit=flux_unit)
 		return
 
@@ -2536,7 +2543,9 @@ class Spectrum(object):
 		plt.tight_layout()
 		if outfile!='': plt.savefig(outfile)
 		else: plt.show()
+		plt.close()
 		return
+
 
 
 
@@ -2925,7 +2934,7 @@ class Modelset(object):
 					if ftype in ['csv']:
 						delimiter = ','
 					elif ftype in ['txt','tsv']:
-						delimiter = r'\s+'
+						delimiter = WHITESPACE
 					else: 
 						if ERROR_CHECKING==True:
 							print('Wave file read in limited to .csv, .txt, and .tsv files')
@@ -3002,6 +3011,7 @@ class Modelset(object):
 				if len(vals) > 0:
 					for i in vals[1:]: f=f+', {}'.format(i)
 				print('\t{}: {}'.format(k,f))
+		print('\t{} total models'.format(len(self.parameters)))
 		print('\nWavelength range: {:.2f} to {:.2f} {}'.format(np.nanmin(self.wave.value),np.nanmax(self.wave.value),str(self.wave.unit)))
 		print('Fluxes in units of {}'.format(str(self.flux[0,:].unit)))
 		return
@@ -3761,6 +3771,7 @@ def modelInfo(model=None,instrument=None,output='print',verbose=ERROR_CHECKING):
 					if len(vals) > 0:
 						for i in vals[1:]: f=f+', {}'.format(i)
 					print('\t\t{}: {}'.format(k,f))
+			print('\t{} Models'.format(int(len(mpars))))
 
 # information from DEFINED_SPECTRAL_MODELS
 			if mdl in list(DEFINED_SPECTRAL_MODELS.keys()):
@@ -4029,6 +4040,7 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 	# 	modelInfo()
 	# 	raise ValueError
 
+# NOTE: TEMPORARY FIX TO DEAL WITH LIMITED FILE SIZES; CAN REMOVE NOW?
 	for i,f in enumerate(files):
 		if verbose==True: print('Reading in file {}'.format(f))
 		if '.h5' in f: mdl = pandas.read_hdf(f)
@@ -4047,6 +4059,11 @@ def getModelSet(modelset='',instrument='SPEX-PRISM',wavefile='',file_prefix=MODE
 		cols = list(models.columns)
 		cols.remove('flux')
 		models.drop_duplicates(subset=cols,inplace=True,ignore_index=True)
+
+# FIX FOR WITH PANDAS >=3.0 TREATMENT OF STRINGS
+	if parse(pandas.__version__)>=parse("3.0"):
+		for x in ['model']:
+			if x in list(models.columns): models[x] = models[x].astype(str)
 
 #	models = readModelSet(file,verbose=verbose)
 
@@ -4355,6 +4372,7 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 
 		par = dict(modelpars.loc[i,:])
 # read in with splat.Spectrum
+#		print(modelpars.loc[i,'file'])
 		mdl = splat.Spectrum(modelpars.loc[i,'file'])
 		wv,flx = mdl.wave.value,mdl.flux.value
 # read in with spmdl.loadModel
@@ -4369,7 +4387,7 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 		if np.isfinite(np.nanmedian(flx))==False:
 			if '.txt' in modelpars.loc[i,'file']: delim='\t'
 			elif '.csv' in modelpars.loc[i,'file']: delim=','
-			else: delim=r'\s+'
+			else: delim=WHITESPACE
 			dp = pandas.read_csv(modelpars.loc[i,'file'],delimiter=delim,names=['wave','flux'],comment='#')
 			wv,flx = dp['wave'],dp['flux']
 			del dp
@@ -4399,7 +4417,7 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 	_,mem = tracemalloc.get_traced_memory()	
 	final_time = time.perf_counter()
 	used_time = final_time-start_time	
-	print('\tComplete: total memory usage = {:.2f} Gb, time used {:.1f} min\n'.format(mem/1.e9,used_time/60.))
+	print('\n\tComplete: total memory usage = {:.2f} Gb, time used {:.1f} min\n'.format(mem/1.e9,used_time/60.))
 #	print('\t{:.0f}% complete, current memory usage = {:.2f} Gb'.format(100*i/len(modelpars),mem/1.e9),end='\r')
 	tracemalloc.stop()
 
@@ -4409,10 +4427,14 @@ def generateModelSet(modelset,wave=[],modelpars={},constraints={},initial_instru
 	dpo = pandas.DataFrame(pars)
 	for x in ['instrument','file']:
 		if x in list(dpo.columns): del dpo[x]
-	try: dpo.to_hdf(outfile,'models','w',complevel=4,index=False)
-	except: 
-		print('Error in saving output to hdf file {}'.format(outfile))
-		return False
+# workaround due to pandas change in str type in version >=3
+	if parse(pandas.__version__)>=parse("3.0"):
+		for x in list(dpo.columns):
+			if isinstance(dpo.loc[0,x],str)==True: dpo[x] = dpo[x].astype(object)
+	dpo.to_hdf(outfile,key='models',mode='w',complevel=4,index=False)
+	# except: 
+	# 	print('Error in saving output to hdf file {}'.format(outfile))
+	# 	return False
 	del dpo, pars
 	gc.collect()
 
@@ -4514,7 +4536,9 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 			# else: 
 			smdls = smdls[smdls[k]==par[k]]
 			smdls.reset_index(inplace=True,drop=True)
-	if len(smdls)==0: raise ValueError('No models match parameters {}'.format(par))
+	if len(smdls)==0: 
+		# if verbose == True: print('No models match parameters {}'.format(par))
+		return False
 	elif len(smdls)>1: 
 		if verbose==True: print('{:.0f} models statisfy criteria, returning the first one'.format(len(smdls)))
 	flx = smdls.loc[0,flux_name]
@@ -4536,7 +4560,7 @@ def getGridModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,verbo
 
 # GET AN INTERPOLATED GRID MODEL
 # THIS WILL BE OBVIATED BY MODELSET CLASS
-def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,defaults={},verbose=ERROR_CHECKING):
+def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,defaults={},verbose=ERROR_CHECKING,debug=False):
 	'''
 	Purpose
 	-------
@@ -4643,6 +4667,9 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 	smdls = copy.deepcopy(models)
 	limits,steps = {},{}
 
+	if debug==True: print('parameters: '.format(par0))
+	if debug==True: print('N models: {}'.format(int(len(smdls))))
+
 	for k in kys:
 		vals = list(set(list(smdls[k])))
 		vals.sort()
@@ -4652,10 +4679,40 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 				raise ValueError('Parameter {} = {} is not among values in models: {}'.format(k,par0[k],vals))
 			smdls = smdls[smdls[k]==par0[k]]
 			smdls.reset_index(inplace=True,drop=True)
+
+			# if debug==True: print('select on {}={}; N models = {}'.format(k,par0[k],int(len(smdls))))
+
 		else:
 # continuous parameters			
 # changed this from downselect to parameter offset 
 #				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
+# 			valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+# 			step = 2.*np.nanmedian(valstep[1:])				
+
+# 			if debug==True: print('values for {} = {}'.format(k,vals))
+# 			if debug==True: print('step = {} for valstep = {}'.format(step,valstep[1:]))
+
+# 			if par0[k] in vals:
+# 				smdls = smdls[smdls[k]==par0[k]]
+# 				smdls.reset_index(inplace=True,drop=True)
+# 				# if par0[k]==np.nanmax(vals): par0[k]=par0[k]-0.01*step
+# 				# else: par0[k]=par0[k]+0.01*step
+
+# 				if debug==True: print('select on {}={}; N models = {}'.format(k,par0[k],int(len(smdls))))
+
+# 			else:
+# 				limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
+
+# 				if debug==True: print('limits for {}: max of {} to {} and min of {} to {}'.format(k,np.nanmin(smdls[k]),par0[k]-step,np.nanmax(smdls[k]),par0[k]+step))
+
+# 				if step>0:
+# 					smdls = smdls[smdls[k]>=limits[k][0]]
+# 					smdls = smdls[smdls[k]<=limits[k][1]]													 
+# 					smdls.reset_index(inplace=True,drop=True)
+# # 
+
+# # changed this from downselect to parameter offset 
+# #				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
 			valstep = np.absolute(np.array(vals)-np.roll(vals,1))
 			step = np.nanmedian(valstep[1:])				
 			if par0[k] in vals:
@@ -4669,6 +4726,9 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 				smdls = smdls[smdls[k]>=limits[k][0]]
 				smdls = smdls[smdls[k]<=limits[k][1]]													 
 				smdls.reset_index(inplace=True,drop=True)
+
+			if debug==True: print('select on {} in {} to {}; N models = {}'.format(k,limits[k][0],limits[k][1],int(len(smdls))))
+
 # overselected - no models to interpolate
 		if len(smdls)==0: 
 			raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par0[k]))
@@ -4693,8 +4753,12 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 			parvals.append(par0[k])
 	parvals = np.array([parvals])
 	fitvals = np.transpose(np.vstack(fitvals))
-	# print(fitvals)
-	# print(parvals)
+
+	if debug==True: print('parvals: {}'.format(parvals))
+	if debug==True: print('type parvals = {} size = {}'.format(type(parvals),np.shape(parvals)))
+	if debug==True: print('fitvals: {}'.format(fitvals))
+	if debug==True: print('type fitvals = {} size = {}'.format(type(fitvals),np.shape(parvals)))
+
 # run interpolation
 	flx = []
 	for i in range(len(smdls.loc[0,flux_name])):
@@ -4724,13 +4788,253 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 
 
 
+
+# GET AN INTERPOLATED GRID MODEL
+# THIS WILL BE OBVIATED BY MODELSET CLASS
+def getInterpModelALT(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,defaults={},verbose=ERROR_CHECKING,debug=True):
+	'''
+	Purpose
+	-------
+
+	Takes a set of models and generates and interpolated model over provided parameters, using 
+	log flux interpolation
+
+	Parameters
+	----------
+
+	models : pandas.DataFrame
+		Dataframe containing the model parameters and fluxes
+
+	par : dict
+		Dictionary specifying the parameters of the interpolated model desired. The format is 
+		{'`key`': `value`}, where `key` is the name of the parameter and `value` its value, which should
+		have the same type as the parameter values in the model's dataframe. Any parameters not
+		provided will be assumed to have the default values from DEFINED_SPECTRAL_MODELS
+
+	wave = [] : list or np.ndarray
+		Array of wavelengths that corresponds to the flux values, and must have the same length as the
+		flux values. Can be unitted or is assumed to be in microns
+
+	flux_name = DEFAULT_FLUX_NAME : str
+		Column name in which the flux values are specified in the models dataframe
+
+	scale = True : bool
+		Set to True if a `scale` parameter is included in par and should be used to scale the fluxes
+
+	defaults = {} : dict
+		Dictionary specifying the default parameters to assume if not constrained by par. This keyword
+		is really a catch if making us of models that are not part of the defined ucdmcmc package,
+		and the default behavior is to use the `default` dictionary provided for each model in
+		DEFINED_SPECTRAL_MODELS
+
+		Set to True if a `scale` parameter is included in par and should be used to scale the fluxes
+
+	verbose = ERROR_CHECKING : bool
+		Set to True to return verbose output
+
+	Outputs
+	-------
+	
+	Returns a Spectrum object containing the wavelength and model flux values, optionally scaled.
+	If model cannot be successfully interpolated (out of range parameters), a ValueError is raised. 
+	If the wave parameter is not included or of a different length than the fluxe array, returns 
+	just the flux array.
+
+	Example
+	-------
+
+	>>> import ucdmcmc
+	>>> models,wave = ucdmcmc.getModels('dback24','SPEX-PRISM')
+	>>> par = {'fsed': 4.0, 'logg': 5.20, 'teff': 1150.0, 'z': 0.3}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+	>>> mdl.name
+
+	dback24 model: fsed=4.0 logg=5.2 teff=1150.0 z=0.3
+
+	>>> par = {'logg': 5.20, 'teff': 1150.0}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+
+	dback24 model: logg=5.2 teff=1150.0 fsed=2.0 z=-0.0
+
+	>>> par = {'fsed': 4.0, 'logg': 5.20, 'teff': 350.0, 'z': 0.3}
+	>>> mdl = ucdmcmc.getInterpModel(models,par,wave=wave)
+
+	ValueError: No model satisfies parameter selection (failed at teff = 350.0)
+
+	Dependencies
+	------------
+		
+	`isUnit()`
+	`plotCopmare()`
+	copy
+	pandas
+	splat.Spectrum
+
+	'''
+# prep wavelength array
+	if isUnit(wave)==False: wv = wave*DEFAULT_WAVE_UNIT
+	else: wv = wave.to(DEFAULT_WAVE_UNIT)
+
+
+# get model defaults
+	if len(defaults) == 0:
+		mset = checkName(models.loc[0,'model'],DEFINED_SPECTRAL_MODELS,output=False)
+		if not isinstance(mset,bool): defaults = DEFINED_SPECTRAL_MODELS[mset]['default']		
+#	
+
+# check all model parameters are provided in set parameters or defaults
+	par0 = copy.deepcopy(par)
+	kys = list(models.columns)
+	for x in ['model',flux_name,'file','scale','chi','chis','dof','rchi','radius']:
+		if x in kys: kys.remove(x)
+	for k in kys:
+# if parameter not provided, use defaults or bail out
+		if k not in list(par0.keys()):
+			if k not in list(defaults.keys()):
+				raise ValueError('Model parameter {} is not defined for input parameters or defaults; must specify all parameters'.format(k))
+			if verbose==True: print('Adding parameter {} = {} as default parameters'.format(k,defaults[k]))
+			par0[k] = defaults[k]
+# remove extraneous parameters
+	# for k in par0:
+	# 	if k not in list(defaults.keys()):
+	# 		if verbose==True: print('Removing parameter {} as it is not one of the default parameters of the model: {}'.format(k,list(defaults.keys())))
+	# 		del par0[k]
+
+
+# downselect models or bail out if we're outside parameter range
+	smdls = copy.deepcopy(models)
+	limits,steps = {},{}
+
+	if debug==True: print('parameters: '.format(par0))
+	if debug==True: print('N models: {}'.format(int(len(smdls))))
+
+	for k in kys:
+		vals = list(set(list(smdls[k])))
+		vals.sort()
+# discrete parameters - match exactly		
+		if isinstance(smdls.loc[0,k],str)==True: 
+			if par0[k] not in vals:
+				raise ValueError('Parameter {} = {} is not among values in models: {}'.format(k,par0[k],vals))
+			smdls = smdls[smdls[k]==par0[k]]
+			smdls.reset_index(inplace=True,drop=True)
+
+			if debug==True: print('select on {}={}; N models = {}'.format(k,par0[k],int(len(smdls))))
+
+		else:
+# continuous parameters			
+# changed this from downselect to parameter offset 
+#				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
+			valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+			step = 2.*np.nanmedian(valstep[1:])				
+
+			if debug==True: print('values for {} = {}'.format(k,vals))
+			if debug==True: print('step = {} for valstep = {}'.format(step,valstep[1:]))
+
+			if par0[k] in vals:
+				smdls = smdls[smdls[k]==par0[k]]
+				smdls.reset_index(inplace=True,drop=True)
+				# if par0[k]==np.nanmax(vals): par0[k]=par0[k]-0.01*step
+				# else: par0[k]=par0[k]+0.01*step
+
+				if debug==True: print('select on {}={}; N models = {}'.format(k,par0[k],int(len(smdls))))
+
+			else:
+				limits[k] = [np.nanmax([np.nanmin(smdls[k]),par0[k]-step]),np.nanmin([np.nanmax(smdls[k]),par0[k]+step])]
+
+				if debug==True: print('limits for {}: max of {} to {} and min of {} to {}'.format(k,np.nanmin(smdls[k]),par0[k]-step,np.nanmax(smdls[k]),par0[k]+step))
+
+				if step>0:
+					smdls = smdls[smdls[k]>=limits[k][0]]
+					smdls = smdls[smdls[k]<=limits[k][1]]													 
+					smdls.reset_index(inplace=True,drop=True)
+# 
+				if debug==True: print('select on {} in {} to {}; N models = {}'.format(k,limits[k][0],limits[k][1],int(len(smdls))))
+
+# overselected - no models to interpolate
+		if len(smdls)==0: 
+			raise ValueError('No model satisfies parameter selection (failed at {} = {})'.format(k,par0[k]))
+	
+# eliminate degenerate parameters
+	kys0 = copy.deepcopy(kys)
+	for k in kys:
+		if len(set(list(smdls[k])))<2: 
+			kys0.remove(k)
+			par0[k] = smdls.loc[0,k]
+	kys = copy.deepcopy(kys0)
+
+	if debug==True: print('interpolating on parameters {}'.format(kys))
+
+	smdls.sort_values(kys,inplace=True)
+	smdls.reset_index(inplace=True,drop=True)	
+
+# prep models for griddata interpolation
+# note that we are taking the log of teff and co
+	fitvals,parvals = (),[]
+	for k in kys:
+		if k=='teff' or k=='co': 
+			fitvals+=tuple([[np.log10(x) for x in smdls[k]]])
+			parvals.append(np.log10(par0[k]))
+		else:
+			fitvals+=tuple([list(smdls[k])])
+			parvals.append(par0[k])
+	parvals = np.array([parvals])
+	fitvals = np.transpose(np.vstack(fitvals))
+
+	if debug==True: print('parvals: {}'.format(parvals))
+	if debug==True: print('type parvals = {} size = {}'.format(type(parvals),np.shape(parvals)))
+	if debug==True: print('fitvals: {}'.format(fitvals))
+	if debug==True: print('type fitvals = {} size = {}'.format(type(fitvals),np.shape(parvals)))
+
+# run interpolation
+	flx = []
+# single parameter - use interp1d <-- note: already built into griddata, but doing this due to griddata issues
+	if len(kys)==1:
+		for i in range(len(smdls.loc[0,flux_name])):
+			fxn = interp1d([x[0] for x in fitvals],[np.log10(x[i]) for x in smdls[flux_name]],'linear',bounds_error=False,fill_value=0.)
+			flx.extend(fxn(parvals[0]))
+# many parameters - use griddata
+	else:
+		for i in range(len(smdls.loc[0,flux_name])):
+			fs = [np.log10(x[i]) for x in smdls[flux_name]]
+			try: 
+				if debug==True: print('fluxes = {}'.format(tuple(fs)))
+				flx.append(griddata(fitvals,tuple(fs),parvals,method='linear',rescale=True)[0])
+				if debug==True: print('flux at i={}: {}'.format(i,flx[-1]))
+			except: 
+				if verbose==True: print('getInterpModel failed for values {}; try reducing parameter constraints'.format(par0))
+	flx = np.array(flx)
+	if debug==True: print('flux: {}'.format(flx))
+	flx = 10.**flx
+	if np.isnan(np.nanmedian(flx))==True: raise ValueError('Could not interpolate {} over grid, possibly due to grid gaps'.format(par0))
+
+# turn into Spectrum and scale if desired
+	name = '{} model: '.format(models.loc[0,'model'])
+# NEED TO ADD - FORMAT STRING FROM PARAMETERS
+	for x in list(par0.keys()): 
+		name=name+'{}={} '.format(x,par0[x])
+	mdl = Spectrum(wave=wave,flux=flx*DEFAULT_FLUX_UNIT,noise=np.array([np.nan]*len(wave))*DEFAULT_FLUX_UNIT,name=name)
+	if 'scale' in list(par.keys()) and scale==True: mdl.scale(par['scale'])
+	mdl.parameters = par0
+
+# apply secondary parameters if present
+	mdl.applyPar(par0)
+
+	return mdl
+
+
+
 # WRAPPER TO GET A GRID OR INTERPOLATED MODEL
 # THIS WILL BE OBVIATED BY MODELSET CLASS
 def getModel(mdls,par,wave,scale=True,verbose=ERROR_CHECKING):
 # get the original model
 	try: sp = getGridModel(mdls,par,wave,scale=scale,verbose=verbose)
-	except: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
-	return sp
+	except: sp = False
+	if isinstance(sp,bool)==False: return sp
+# get interpolated model
+	try: sp = getInterpModel(mdls,par,wave,scale=scale,verbose=verbose)
+	except: sp = False
+	if isinstance(sp,bool)==False: return sp
+	raise ValueError('No model is viable for parameters {}'.format(par))
 
 
 
@@ -5043,13 +5347,14 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 
 	'''
 # make sure object spectrum is sampled to same wavelength scale as models
+#	print(constraints,plimits)
 	if len(spc.flux)!=len(models.loc[0,flux_name]):
 		raise ValueError('Spectrum and models are not on same wavelength scale; be sure to resample observed spectrum onto model scale')
 	spscl = copy.deepcopy(spc)
 
 # backwards compatability for constraint keyword
 	if len(list(constraints.keys()))>0:
-		print('Warning: constraints keyword will be deprecated in future version; use plimits instead')
+#		print('Warning: constraints keyword will be deprecated in future version; use plimits instead')
 		plimits = copy.deepcopy(constraints)
 
 # constrain models if needed
@@ -5057,12 +5362,14 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 	for k in list(plimits.keys()):
 		if k in list(mdls.columns):
 			if isinstance(mdls.loc[0,k],str):
-				par = list(set(list(dp[k])))
-				if verbose==True: print('Constraining {} to within {}'.format(k,plimits[k]))
-				for p in par:
-					if p not in plimits[k]: 
-						mdls = mdls[mdls[k]!=p]
-						mdls.reset_index(inplace=True,drop=True)
+				if len(plimits[k])>0:
+					par = list(set(list(mdls[k])))
+#					print(k,par,plimits[k])
+					if verbose==True: print('Constraining {} to within {}'.format(k,plimits[k]))
+					for p in par:
+						if p not in plimits[k]: 
+							mdls = mdls[mdls[k]!=p]
+							mdls.reset_index(inplace=True,drop=True)
 			else:
 				if verbose==True: print('Constraining {} to {}-{}'.format(k,plimits[k][0],plimits[k][1]))
 				mdls = mdls[mdls[k]>=plimits[k][0]]
@@ -5121,7 +5428,7 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 				vals = list(set(list(mdls[k])))
 				vals.sort()
 				if isinstance(vals,str)==False: plimits[k] = [vals[0],vals[-1]]
-				else: plimits[k] = []
+				else: plimits[k] = vals
 			elif k in list(PARAMETERS.keys()): plimits[k] = PARAMETERS[k]['limits']
 			else: plimits[k] = [p0[k],p0[k]]
 
@@ -5176,12 +5483,25 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 			pnew[k] = np.nanmax([pnew[k],np.nanmin(plimits[k])])
 # discrete variables
 		for k in list(pfitd.keys()): 
-			vals = list(set(list(mdls[k])))
-			pnew[k] = np.random.choice(vals)
+#			vals = list(set(list(mdls[k])))
+			pnew[k] = np.random.choice(plimits[k])
 # do we need this next line?			
 #		pnew = pnew | pfitd
+# try grid model			
 		try:
 			cmdl = getModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
+# try interpolated model			
+		# except:
+		# 	cmdl = getInterpModel(mdls,pnew,spscl.wave,scale=False,verbose=verbose)
+# model can't be read, stay in place
+		except: 
+			if verbose==True: print('Error reading in parameters {}'.format(pnew))
+			pvals.append(pvals[-1])
+			chis.append(chis[-1])
+			scales.append(scales[-1])
+			mdlflxs.append(mdlflxs[-1])
+# compare model			
+		else:
 #			if verbose==True: print(i,pnew)
 			chinew,scl,_ = compareSpec(spscl.flux.value,cmdl.flux.value,spscl.noise.value,verbose=verbose)
 			# if np.isnan(radius)==False and np.isnan(e_radius)==False:
@@ -5216,13 +5536,6 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 				chis.append(chis[-1])
 				scales.append(scales[-1])
 				mdlflxs.append(mdlflxs[-1])
-# model can't be read, stay in place
-		except: 
-			if verbose==True: print('Error reading in parameters {}'.format(pnew))
-			pvals.append(pvals[-1])
-			chis.append(chis[-1])
-			scales.append(scales[-1])
-			mdlflxs.append(mdlflxs[-1])
 # iterim save
 		if iterim>0 and i>0 and np.mod(i,iterim)==0 and report==True:
 # save parameters
@@ -5255,11 +5568,13 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 			for k in plotpars:
 				if isinstance(dpfit.loc[0,k],str): plotpars.remove(k)
 			if absolute==True: plotpars.append('radius')
-			pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
+			pbest = {}
+			for k in plotpars: pbest[k] = dpfit.loc[np.argmin(dpfit['chis']),k]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 			weights = np.array(dof/(dof+dpfit['chis']-np.nanmin(dpfit['chis'])))
 			outfile = file_prefix+'_corner.pdf'
-			plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
+			try: plotCorner(dpfit,plotpars=plotpars,pbest=pbest,weights=weights,outfile=outfile,verbose=verbose)
+			except: print('Warning: had trouble making corner plot')
 # plot chains
 			plotpars.append('chis')
 			plotpars.append('scale')
@@ -5319,12 +5634,14 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 		for k in plotpars:
 			if isinstance(dpfit.loc[0,k],str): plotpars.remove(k)
 		if absolute==True: plotpars.append('radius')
-		pltbest = [dpfit.loc[np.argmin(dpfit['chis']),x] for x in plotpars]
+		pbest = {}
+		for k in plotpars: pbest[k] = dpfit.loc[np.argmin(dpfit['chis']),k]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 		weights = np.array(dof/(dof+dpfit['chis']-np.nanmin(dpfit['chis'])))
 		outfile = file_prefix+'_corner.pdf'
 		if verbose==True: print('Plotting corner plot to {}'.format(outfile))
-		plotCorner(dpfit,plotpars,pbest,weights=weights,outfile=outfile,verbose=verbose)
+		try: plotCorner(dpfit,plotpars=plotpars,pbest=pbest,weights=weights,outfile=outfile,verbose=verbose)
+		except: print('Warning: had trouble making corner plot')
 # plot chains
 		plotpars.append('chis')
 		plotpars.append('scale')
@@ -5366,120 +5683,34 @@ def fitEMCEE(spc,models,p0={},plimits={},output='all',
 ####################################################
 
 # PLOT COMPARISON OF TWO SPECTRA
-def plotCompare(sspec,cspec,outfile='',olabel='',clabel='Comparison',absolute=False,xscale='linear',yscale='linear',
-	figsize=[8,5],height_ratio=[5,1],scale=1.,fontscale=1,xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',
-	ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
+def plotCompare(spec,cspec,absolute=False,secondary='diff',
+	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',
+	scale=1.,plot_scale=1.,plot_scale2=-1.,xscale='linear',yscale='linear',yscale2='linear',
+	xlim=None,ylim=None,ylim2=None,xticks=None,yticks=None,yticks2=None,legend_loc=1,fontscale=1,
+	figsize=[8,5],height_ratio=[5,1],outfile='',verbose=ERROR_CHECKING):
 
-	sspec.scale(scale)
-	cspec.scale(scale)
-	diff = sspec.flux.value-cspec.flux.value
-	if olabel=='': olabel=sspec.name
+# parameter check
+	if plot_scale2<0: plot_scale2=plot_scale
+	if olabel=='': olabel=spec.name
+	sspec = copy.deepcopy(spec)
 
-	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
-	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
-	# if absolute==True: ylabel='Absolute '+ylabel
+# set up
 	strue = sspec.wave.value[np.isnan(sspec.flux.value)==False]
 	wrng = [np.nanmin(strue),np.nanmax(strue)]
 
-	plt.clf()
-	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
-	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
-	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=4,alpha=0.5,label=clabel)
-	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
-	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
-	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = np.nanmax(cspec.flux.value)
-	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
-	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
-	else: ax1.set_ylim(ylim)
-	if yscale=='log':
-#		ax1.set_ylim([x*scl for x in [1.e-2,2]])
-		if ylim==None: ax1.set_ylim([np.nanmean(sspec.noise.value)/2.,2*scl])
-	if xlim==None: xlim=wrng
-	ax1.set_xlim(xlim)
-	ax1.set_xscale(xscale)
-	ax1.set_yscale(yscale)
-	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
-	ax1.tick_params(axis="x", labelsize=0)
-	ax1.tick_params(axis="y", labelsize=14*fontscale)
-
-	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
-	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
-	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = np.nanquantile(diff,[0.02,0.98])
-	# ax2.set_ylim([2*sc for sc in scl])
-	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
-	ax2.set_xlim(xlim)
-	ax2.set_xscale(xscale)
-	ax2.set_yscale(yscale)
-	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
-	ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
-	ax2.tick_params(axis="x", labelsize=14*fontscale)
-	ax2.tick_params(axis="y", labelsize=14*fontscale)
-	plt.tight_layout()
-	if outfile!='': plt.savefig(outfile)
-	if verbose==True: plt.show()
-	return
-
-# PLOT COMPARISON OF SPECTRUM AND BEST MCMC FIT, ALONG WITH SAMPLING OF CHAIN
-def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,outfile='',
-	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',scale=1.,plot_scale=1.,
-	residual_plot_scale=-1.,xscale='linear',yscale='linear',figsize=[8,5],height_ratio=[5,1],
-	drawalpha=0.3,fontscale=1,ylim=None,xlim=None,legend_loc=1,verbose=ERROR_CHECKING):
-# parameter check
-	if residual_plot_scale<0: residual_plot_scale=plot_scale
-# set up
-	# xlabel = r'Wavelength'+' ({:latex})'.format(sspec.wave.unit)
-	# ylabel = r'F$_\lambda$'+' ({:latex})'.format(sspec.flux.unit)
-	# if absolute==True: ylabel='Absolute '+ylabel
-	strue = spec.wave.value[np.isnan(spec.flux.value)==False]
-	wrng = [np.nanmin(strue),np.nanmax(strue)]
-	if nsample<0: nsample = int(len(chain)/10)
-	if olabel=='': olabel=sspec.name
-
-# first identify the best fit model
-	pbest = dict(chain.loc[np.argmin(chain['chis']),:])
-	cspec = getModel(models,pbest,spec.wave)
-#	if 'scale' not in list(chain.columns): cspec.scale(scale)
-#	cspec.scale(pbest['scale'])
 # scale
-	sspec = copy.deepcopy(spec)
 	sspec.scale(scale)
-#	print(np.nanmedian(sspec.flux.value))
 	cspec.scale(scale)
-	diff = sspec.flux.value-cspec.flux.value
-
-# now identify the random sample
-	chainsub = chain[chain['chis']/np.nanmin(chain['chis'])<relchi]
-	chainsub.reset_index(inplace=True)
-	nsamp = np.nanmin([nsample,len(chainsub)])
-	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux for i in np.random.randint(0,len(chainsub)-1,nsamp)]
-	fluxes = [f*scale for f in fluxes]
 
 # plot
 	plt.clf()
-	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
-	if method=='minmax':
-		minflx = np.nanmin(fluxes,axis=0)*scale
-		maxflx = np.nanmax(fluxes,axis=0)*scale
-		# if 'scale' not in list(chainsub.columns):
-		#	 minflx = minflx*scale 
-		#	 maxflx = maxflx*scale 
-		ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=0.2)
-	elif method=='meanstd':
-		meanflx = np.nanmean(fluxes,axis=0)*scale
-		stdflx = np.nanstd(fluxes,axis=0)*scale
-		# if 'scale' not in list(chainsub.columns):
-		#	 meanflx = meanflx*scale 
-			# stdflx = stdflx*scale 
-		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=0.2)
-	else:
-		for f in fluxes: ax1.step(cspec.wave.value,f,'m-',linewidth=2,alpha=drawalpha)
+	if secondary==None: fg, ax1 = plt.subplots(1, 1, figsize=figsize)
+	else: fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
 	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
-	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
+	ax1.fill_between(sspec.wave.value,sspec.flux.value+sspec.noise.value,sspec.flux.value-sspec.noise.value,color='k',alpha=0.3)
 	scl = np.nanmax(cspec.flux.value)
 	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
 	if ylim==None: ax1.set_ylim([x*scl*plot_scale for x in [-0.1,1.3]])
@@ -5490,26 +5721,192 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 		if ylim==None: ax1.set_ylim([x*scl for x in [1.e-2,2]])
 	if xlim==None: xlim=wrng
 	ax1.set_xlim(xlim)
-	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
+	ax1.set_ylabel(ylabel,fontsize=16*fontscale)
+	if yticks!=None and len(yticks)==2: ax2.set_yticks(yticks[0],yticks[1])
 	ax1.tick_params(axis="x", labelsize=0)
-	ax1.tick_params(axis="y", labelsize=14*fontscale)
-
-	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
-	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
-	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
-	scl = np.nanquantile(diff,[0.02,0.98])
-	ax2.set_ylim([scl[0]-residual_plot_scale*(scl[1]-scl[0]),scl[1]+residual_plot_scale*(scl[1]-scl[0])])
-	ax2.set_xlim(xlim)
-	ax2.set_xscale(xscale)
-	ax2.set_yscale(yscale)
-	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
-	ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
-	ax2.tick_params(axis="x", labelsize=14*fontscale)
-	ax2.tick_params(axis="y", labelsize=14*fontscale)
+	ax1.tick_params(axis="y", labelsize=16*fontscale)
+	if secondary!=None:
+		if 'sig' in secondary.lower(): 
+			diff = (sspec.flux.value-cspec.flux.value)/sspec.noise.value
+			ns = np.ones(len(sspec.wave.value))
+		elif 'rel' in secondary.lower(): 
+			diff = (sspec.flux.value-cspec.flux.value)/sspec.flux.value
+			ns = np.ones(len(sspec.wave.value))
+		else: 
+			diff = sspec.flux.value-cspec.flux.value
+			ns = sspec.noise.value
+		ax2.step(sspec.wave.value,diff,'m-',linewidth=2)
+		ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
+		ax2.fill_between(sspec.wave.value,ns,-1.*ns,color='k',alpha=0.3)
+		scl = np.nanquantile(diff,[0.02,0.98])
+		ax2.set_ylim([scl[0]-plot_scale2*(scl[1]-scl[0]),scl[1]+plot_scale2*(scl[1]-scl[0])])
+		ax2.set_yscale(yscale2)
+		ax2.set_xlabel(xlabel,fontsize=16*fontscale)
+		ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
+		if xticks!=None and len(xticks)==2: ax2.set_xticks(xticks[0],xticks[1])
+		if yticks2!=None and len(yticks2)==2: ax2.set_yticks(yticks2[0],yticks2[1])
+		ax2.tick_params(axis="x", labelsize=14*fontscale)
+		ax2.tick_params(axis="y", labelsize=14*fontscale)
+	else:
+		ax1.set_xlabel(xlabel,fontsize=16*fontscale)
+		if xticks!=None and len(xticks)==2: ax1.set_xticks(xticks[0],xticks[1])
+		ax1.tick_params(axis="x", labelsize=14*fontscale)
 	plt.tight_layout()
 	if outfile!='': plt.savefig(outfile)
 	if verbose==True: plt.show()
+	plt.close()
 	return
+
+# 	plt.clf()
+# 	fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
+# 	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
+# 	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=4,alpha=0.5,label=clabel)
+# 	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
+# 	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
+# 	ax1.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
+# 	scl = np.nanmax(cspec.flux.value)
+# 	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
+# 	if ylim==None: ax1.set_ylim([x*scl for x in [-0.1,1.3]])
+# 	else: ax1.set_ylim(ylim)
+# 	if yscale=='log':
+# 		if ylim==None: ax1.set_ylim([np.nanmean(sspec.noise.value)/2.,2*scl])
+# 	if xlim==None: xlim=wrng
+# 	ax1.set_xlim(xlim)
+# 	ax1.set_xscale(xscale)
+# 	ax1.set_yscale(yscale)
+# 	ax1.set_ylabel(ylabel,fontsize=12*fontscale)
+# 	ax1.tick_params(axis="x", labelsize=0)
+# 	ax1.tick_params(axis="y", labelsize=14*fontscale)
+
+# 	ax2.step(sspec.wave.value,diff,'k-',linewidth=2)
+# 	ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
+# 	ax2.fill_between(sspec.wave.value,sspec.noise.value,-1.*sspec.noise.value,color='k',alpha=0.3)
+# 	scl = np.nanquantile(diff,[0.02,0.98])
+# 	ax2.set_ylim([scl[0]-1.*(scl[1]-scl[0]),scl[1]+1.*(scl[1]-scl[0])])
+# 	ax2.set_xlim(xlim)
+# 	ax2.set_xscale(xscale)
+# 	ax2.set_yscale(yscale)
+# 	ax2.set_xlabel(xlabel,fontsize=16*fontscale)
+# 	ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
+# 	if xticks!=None and len(xticks)==2: ax2.set_xticks(xticks[0],xticks[1])
+# 	ax2.tick_params(axis="x", labelsize=14*fontscale)
+# 	ax2.tick_params(axis="y", labelsize=14*fontscale)
+# 	plt.tight_layout()
+# 	if outfile!='': plt.savefig(outfile)
+# 	if verbose==True: plt.show()
+# 	plt.close()
+# 	return
+
+
+
+# PLOT COMPARISON OF SPECTRUM AND BEST MCMC FIT, ALONG WITH SAMPLING OF CHAIN
+def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,secondary='diff',
+	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',drawalpha=0.3,
+	scale=1.,plot_scale=1.,plot_scale2=-1.,xscale='linear',yscale='linear',yscale2='linear',
+	xlim=None,ylim=None,ylim2=None,xticks=None,yticks=None,yticks2=None,legend_loc=1,fontscale=1,
+	figsize=[8,5],height_ratio=[5,1],outfile='',verbose=ERROR_CHECKING):
+# parameter check
+	if plot_scale2<0: plot_scale2=plot_scale
+# set up
+	strue = spec.wave.value[np.isnan(spec.flux.value)==False]
+	wrng = [np.nanmin(strue),np.nanmax(strue)]
+	if nsample<0: nsample = int(len(chain)/10)
+	if olabel=='': olabel=spec.name
+
+# first identify the best fit model
+	pbest = dict(chain.loc[np.argmin(chain['chis']),:])
+	cspec = getModel(models,pbest,spec.wave)
+# scale
+	sspec = copy.deepcopy(spec)
+	sspec.scale(scale)
+	cspec.scale(scale)
+
+# now identify the random sample
+	chainsub = chain[chain['chis']/np.nanmin(chain['chis'])<relchi]
+	chainsub.reset_index(inplace=True)
+	nsamp = np.nanmin([nsample,len(chainsub)])
+	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux.value for i in np.random.randint(0,len(chainsub)-1,nsamp)]
+	fluxes = [f*scale for f in fluxes]
+
+# plot
+	plt.clf()
+	if secondary==None: fg, ax1 = plt.subplots(1, 1, figsize=figsize)
+	else: fg, (ax1,ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': height_ratio}, sharex=True, figsize=figsize)
+	if method=='minmax':
+		minflx = np.nanmin(fluxes,axis=0)*scale
+		maxflx = np.nanmax(fluxes,axis=0)*scale
+		ax1.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=drawalpha)
+	elif method=='meanstd':
+		meanflx = np.nanmean(fluxes,axis=0)*scale
+		stdflx = np.nanstd(fluxes,axis=0)*scale
+		ax1.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=drawalpha)
+	else:
+		for f in fluxes: ax1.step(sspec.wave.value,f,'m-',linewidth=2,alpha=drawalpha)
+	ax1.step(sspec.wave.value,sspec.flux.value,'k-',linewidth=2,label=olabel)
+	ax1.step(cspec.wave.value,cspec.flux.value,'m-',linewidth=2,alpha=0.7,label=clabel)
+	ax1.legend(fontsize=12*fontscale,loc=legend_loc)
+	ax1.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
+	ax1.fill_between(sspec.wave.value,sspec.flux.value+sspec.noise.value,sspec.flux.value-sspec.noise.value,color='k',alpha=0.3)
+	scl = np.nanmax(cspec.flux.value)
+	scl = np.nanmax([scl,np.nanmax(sspec.flux.value)])
+	if ylim==None: ax1.set_ylim([x*scl*plot_scale for x in [-0.1,1.3]])
+	else: ax1.set_ylim(ylim)
+	ax1.set_xscale(xscale)
+	ax1.set_yscale(yscale)
+	if yscale=='log':
+		if ylim==None: ax1.set_ylim([x*scl for x in [1.e-2,2]])
+	if xlim==None: xlim=wrng
+	ax1.set_xlim(xlim)
+	ax1.set_ylabel(ylabel,fontsize=16*fontscale)
+	if yticks!=None and len(yticks)==2: ax2.set_yticks(yticks[0],yticks[1])
+	ax1.tick_params(axis="x", labelsize=0)
+	ax1.tick_params(axis="y", labelsize=16*fontscale)
+	if secondary!=None:
+		if 'sig' in secondary.lower(): 
+			diff = (sspec.flux.value-cspec.flux.value)/sspec.noise.value
+			diffsamp = [(sspec.flux.value-f)/sspec.noise.value for f in fluxes]
+			ns = np.ones(len(sspec.wave.value))
+		elif 'rel' in secondary.lower(): 
+			diff = (sspec.flux.value-cspec.flux.value)/sspec.flux.value
+			diffsamp = [(sspec.flux.value-f)/sspec.flux.value for f in fluxes]
+			ns = np.ones(len(sspec.wave.value))
+		else: 
+			diff = sspec.flux.value-cspec.flux.value
+			diffsamp = [sspec.flux.value-f for f in fluxes]
+			ns = sspec.noise.value
+		if method=='minmax':
+			minflx = np.nanmin(diffsamp,axis=0)*scale
+			maxflx = np.nanmax(diffsamp,axis=0)*scale
+			ax2.fill_between(sspec.wave.value,minflx,maxflx,color='m',alpha=drawalpha)
+		elif method=='meanstd':
+			meanflx = np.nanmean(diffsamp,axis=0)*scale
+			stdflx = np.nanstd(diffsamp,axis=0)*scale
+			ax2.fill_between(sspec.wave.value,meanflx-stdflx,meanflx+stdflx,color='m',alpha=drawalpha)
+		else:
+			for f in diffsamp: ax2.step(sspec.wave.value,f,'m-',linewidth=2,alpha=drawalpha)
+		ax2.step(sspec.wave.value,diff,'m-',linewidth=2)
+		ax2.plot([np.nanmin(sspec.wave.value),np.nanmax(sspec.wave.value)],[0,0],'k--')
+		ax2.fill_between(sspec.wave.value,ns,-1.*ns,color='k',alpha=0.3)
+		scl = np.nanquantile(diff,[0.02,0.98])
+		ax2.set_ylim([scl[0]-plot_scale2*(scl[1]-scl[0]),scl[1]+plot_scale2*(scl[1]-scl[0])])
+		ax2.set_yscale(yscale2)
+		ax2.set_xlabel(xlabel,fontsize=16*fontscale)
+		ax2.set_ylabel(ylabel2,fontsize=16*fontscale)
+		if xticks!=None and len(xticks)==2: ax2.set_xticks(xticks[0],xticks[1])
+		if yticks2!=None and len(yticks2)==2: ax2.set_yticks(yticks2[0],yticks2[1])
+		ax2.tick_params(axis="x", labelsize=14*fontscale)
+		ax2.tick_params(axis="y", labelsize=14*fontscale)
+	else:
+		ax1.set_xlabel(xlabel,fontsize=16*fontscale)
+		if xticks!=None and len(xticks)==2: ax1.set_xticks(xticks[0],xticks[1])
+		ax1.tick_params(axis="x", labelsize=14*fontscale)
+	plt.tight_layout()
+	if outfile!='': plt.savefig(outfile)
+	if verbose==True: plt.show()
+	plt.close()
+	return
+
+
 
 # PLOT CHAINS OF MCMC FIT
 def plotChains(dpfit,plotpars,pbest={},outfile='',xlabel='Step',labeldict=PARAMETER_PLOT_LABELS,verbose=ERROR_CHECKING):
@@ -5541,11 +5938,14 @@ def plotChains(dpfit,plotpars,pbest={},outfile='',xlabel='Step',labeldict=PARAME
 	plt.tight_layout()
 	if outfile!='': fig.savefig(outfile)
 	if verbose==True: plt.show()
+	plt.close()
 	return
 
 
 # PLOT PARAMETER DISTRIBUTIONS (CORNER PLOT) OF MCMC FIT
-def plotCorner(dpfit,plotpars=[],pbest={},weights=[],outfile='',verbose=ERROR_CHECKING):
+def plotCorner(dpfit,plotpars=[],pbest={},weights=[],plabels=[],truths=[],quantiles=[0.16, 0.5, 0.84],
+	histlevels=[0.25,0.5,0.75],show_titles=False, fontscale=1,outfile='',reorder=False,truth_color='m',
+	smooth=1,figsize=[8,5],verbose=ERROR_CHECKING):
 # if initial input is output from MCMC, prepare the outputs
 	if isinstance(dpfit,dict):
 		par = copy.deepcopy(dpfit)
@@ -5575,36 +5975,51 @@ def plotCorner(dpfit,plotpars=[],pbest={},weights=[],outfile='',verbose=ERROR_CH
 		if verbose==True: print('Warning: there are no parameters to plot!')
 		return
 # reorder
-	ppars2 = []
-	for k in list(PARAMETER_PLOT_LABELS.keys()):
-		if k in ppars: ppars2.append(k)
-	for k in ppars:
-		if k not in ppars2: ppars2.append(k)
-	dpplot = dpfit[ppars2]
+	if reorder==True:
+		ppars2 = []
+		for k in list(PARAMETER_PLOT_LABELS.keys()):
+			if k in ppars: ppars2.append(k)
+		for k in ppars:
+			if k not in ppars2: ppars2.append(k)
+		ppars = copy.deepcopy(ppars2)
+	dpplot = dpfit[ppars]
 		
 # weights
 	if len(weights)<len(dpplot): weights=np.ones(len(dpplot))
 	
 # labels
-	plabels=[]
-	for k in ppars2:
-		if k in list(PARAMETER_PLOT_LABELS.keys()): plabels.append(PARAMETER_PLOT_LABELS[k])
-		else: plabels.append(k)
+	plabs = []
+# assign based on dictionary or built-in label array
+	if isinstance(plabels,dict)==True:
+		for k in ppars:
+			if k in list(plabels.keys()): plabs.append(plabels[k])
+			elif k in list(PARAMETER_PLOT_LABELS.keys()): plabs.append(PARAMETER_PLOT_LABELS[k])
+			else: plabs.append(k)
+# if given list of labels, just use that
+	if isinstance(plabels,list)==True and len(plabels)==len(ppars): plabs = copy.deepcopy(plabels)
+# if insufficient list, then assign based on built-in label array
+#	print(plabs,ppars)
+	if len(plabs)<len(ppars):
+		for k in ppars:
+			if k in list(PARAMETER_PLOT_LABELS.keys()): plabels.append(PARAMETER_PLOT_LABELS[k])
+			else: plabels.append(k)
 
 # best fit parameters
-	truths = [np.nan for x in ppars2]
+	if len(truths)==0: truths = [np.nan]*len(ppars)
 	if len(list(pbest.keys()))>0:
-		for i,k in enumerate(ppars2):
+		for i,k in enumerate(ppars):
 			if k in list(pbest.keys()): truths[i]=pbest[k]
 
 # generate plot
 	plt.clf()
-	fig = corner.corner(dpplot,quantiles=[0.16, 0.5, 0.84], labels=plabels, show_titles=True, weights=weights, \
-						labelpad=0, title_kwargs={"fontsize": 14},label_kwargs={'fontsize': 14}, smooth=1,truths=truths, \
-						truth_color='m',hist2d_kwargs={'levels': [0.25,0.5,0.75]},verbose=verbose)
+	plt.figure(figsize=figsize)
+	fig = corner.corner(dpplot,quantiles=quantiles, labels=plabs, show_titles=show_titles, weights=weights, \
+						labelpad=0, title_kwargs={"fontsize": int(14*fontscale)},label_kwargs={'fontsize': int(14*fontscale)}, \
+						smooth=smooth,truths=truths, truth_color=truth_color,hist2d_kwargs={'levels': histlevels},verbose=verbose)
 	plt.tight_layout()
 	if outfile!='': fig.savefig(outfile)
 	if verbose==True: plt.show()
+	plt.close()
 	return
 
 
