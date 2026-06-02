@@ -6001,8 +6001,8 @@ def plotCorner(dpfit,plotpars=[],pbest={},weights=[],plabels=[],truths=[],quanti
 #	print(plabs,ppars)
 	if len(plabs)<len(ppars):
 		for k in ppars:
-			if k in list(PARAMETER_PLOT_LABELS.keys()): plabels.append(PARAMETER_PLOT_LABELS[k])
-			else: plabels.append(k)
+			if k in list(PARAMETER_PLOT_LABELS.keys()): plabs.append(PARAMETER_PLOT_LABELS[k])
+			else: plabs.append(k)
 
 # best fit parameters
 	if len(truths)==0: truths = [np.nan]*len(ppars)
