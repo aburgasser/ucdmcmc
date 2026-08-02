@@ -98,7 +98,7 @@ from tqdm import tqdm
 
 
 # reference parameters
-VERSION = '2026.04.03'
+VERSION = '2026 Aug 1'
 __version__ = VERSION
 GITHUB_URL = 'http://www.github.com/aburgasser/ucdmcmc/'
 ZENODO_URL = 'https://doi.org/10.5281/zenodo.16923762'
@@ -153,7 +153,8 @@ PARAMETERS = {
 	'lsf': {'type': float,'label': r'LSF ($\mu$m)','fmt': '{:.3f}','step':1.e-4,'altname': ['line spread function','line broadening','broadening'],'default': 0.,'limits':[0,10]},
 	'foff': {'type': float,'label': r'$\epsilon_f$','fmt': '{:.2f}','step':0.01,'altname': ['flux shift','flux offset','dflux','eflux','df','ef'],'default': 0.,'limits':[-10,10]},
 	'telluric': {'type': float,'label': r'$\alpha$','fmt': '{:.2f}','step':0.01,'altname': ['tellabs','tell'],'default': 0.,'limits':[0,10]},
-	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],'default': 0.08,'limits':[0,1000]},
+	'radius': {'type': float,'label': r'R (R$_\odot$)','fmt': '{:.3f}','step':0.001,'altname': ['rad','r'],'default': 0.08,'limits':[0,100]},
+	'radius_jup': {'type': float,'label': r'R (R$_J$)','fmt': '{:.2f}','step':0.001,'altname': ['radjup','rjup','rj'],'default': 0.8,'limits':[0,100]},
 	'chis': {'type': float,'label': r'$\chi^2$','fmt': '{:.0f}','step':-99,'altname': ['chi'],'default': 1.,'limits':[0,1e30]}
 }
 ALT_PARAMETERS = ['av','pshift','wshift','rv','vsini','lsf','foff']
@@ -184,8 +185,8 @@ DEFINED_INSTRUMENTS = {
 	'SPEX-SXD': {'instrument_name': 'IRTF SpeX SXD', 'altname': ['SXD'], 'wave_range': [0.7,2.5]*u.micron, 'resolution': 2000, 'npix': 2, 'bibcode': '2003PASP..115..362R', 'sample': 'SPEX-SXD_J0559-1404_Cushing2005.csv','sample_name': '2MASS J0559-1404', 'sample_bibcode': '2005ApJ...623.1115C', 'absolute': True},
 	'SPHEREX': {'instrument_name': 'SPHEREx', 'altname': ['SPX'], 'wave_range': [0.75,5.0]*u.micron, 'resolution': 50, 'npix': 2, 'bibcode': '2020SPIE11443E..0IC', 'sample': '','sample_name': '', 'sample_bibcode': '', 'absolute': False},
 	'STIS-SXD': {'instrument_name': 'HST/STIS + IRTF/SpeX/SXD', 'altname': ['STIS'], 'wave_range': [0.2,2.5]*u.micron, 'resolution': 2000, 'npix': 2, 'bibcode': '2003PASP..115..362R', 'sample': '','sample_name': 'Wolf 1130A', 'sample_bibcode': '', 'absolute': False},
-	'XSHOOTER-VIS': {'instrument_name': 'VLT/X-SHOOTER VIS band', 'altname': ['XVIS'], 'wave_range': [0.57,1.01]*u.micron, 'resolution': 13000, 'npix': 3, 'bibcode': '2011A&A...536A.105V', 'sample': 'XSHOOTER-VIS_J1256-6202_Zhang2019.csv','sample_name': 'VVV J12564163-6202039', 'sample_bibcode': '2019MNRAS.486.1840Z', 'absolute': False},
 	'XSHOOTER-NIR': {'instrument_name': 'VLT/X-SHOOTER NIR band', 'altname': ['XNIR'], 'wave_range': [1.00,2.45]*u.micron, 'resolution': 9600, 'npix': 3, 'bibcode': '2011A&A...536A.105V', 'sample': 'XSHOOTER-NIR_J1256-6202_Zhang2019.csv','sample_name': 'VVV J12564163-6202039', 'sample_bibcode': '2019MNRAS.486.1840Z', 'absolute': False},
+	'XSHOOTER-VIS': {'instrument_name': 'VLT/X-SHOOTER VIS band', 'altname': ['XVIS'], 'wave_range': [0.57,1.01]*u.micron, 'resolution': 13000, 'npix': 3, 'bibcode': '2011A&A...536A.105V', 'sample': 'XSHOOTER-VIS_J1256-6202_Zhang2019.csv','sample_name': 'VVV J12564163-6202039', 'sample_bibcode': '2019MNRAS.486.1840Z', 'absolute': False},
 }
 
 DEFINED_SPECTRAL_MODELS = {\
@@ -207,8 +208,9 @@ DEFINED_SPECTRAL_MODELS = {\
 	'elfowl25-lowteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (275-600 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-low','elfowl-v2-low','elfowl-co2-low','sonora-elfowl-co2-low','wog25-low'], 'default': {'teff': 500., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
 	'elfowl25-midteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (600-1500 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-mid','elfowl-v2-mid','elfowl-co2-mid','sonora-elfowl-co2-mid','wog25-mid'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
 	'elfowl25-highteff': {'instruments': {}, 'name': 'Sonora Elfowl 2025 (1500-2400 K)', 'citation': 'Wogan et al. (2025)', 'bibcode': '2025RNAAS...9..108W', 'altname': ['elfowl2-high','elfowl-v2-high','elfowl-co2-high','sonora-elfowl-co2-high','wog25-high'], 'default': {'teff': 2000., 'logg': 5.0, 'z': 0., 'co': 1, 'kzz': 2.0}}, \
-	'exorem21': {'instruments': {}, 'name': 'Exo-REM 2021', 'citation': 'Blain et al. (2021)', 'bibcode': '2021A&A...646A..15B,', 'altname': ['exorem','exorem2021','exo-rem','blain2021','blain21','bla21'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 0.45, 'cld': 'SIMPLE'}}, \
-	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['kitzmann20','kitzmann2020','kit20','helios-r2','helios20','helios2020'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
+	'exorem21': {'instruments': {}, 'name': 'Exo-REM 2021', 'citation': 'Blain et al. (2021)', 'bibcode': '2021A&A...646A..15B', 'altname': ['exorem','exorem2021','exo-rem','blain2021','blain21','bla21'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 0.45, 'cld': 'SIMPLE'}}, \
+	'flameskimmer26': {'instruments': {}, 'name': 'Sonora Flameskimmer', 'citation': 'Mang et al. (in prep)', 'bibcode': '', 'altname': ['mang26','man26','flame','flameskimmer','fskimmer','fskim','fskim26'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'co': 1.0, 'kzz':2.}}, \
+	'helios': {'instruments': {}, 'name': 'Helios', 'citation': 'Kitzmann et al. (2020)', 'bibcode': '2020ApJ...890..174K', 'altname': ['helios','kitzmann20','kit20'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'karalidi21': {'instruments': {}, 'name': 'Sonora Cholla', 'citation': 'Karalidi et al. (2021)', 'bibcode': '2021ApJ...923..269K', 'altname': ['karalidi2021','karalidi','sonora-cholla','cholla'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 4.}}, \
 	'lacy23': {'instruments': {}, 'name': 'Lacy & Burrows (2023)', 'citation': 'Lacy & Burrows (2023)', 'bibcode': '2023ApJ...950....8L', 'altname': ['lacy2023','lac23','lacy'], 'default': {'teff': 500., 'logg': 4.5, 'z': 0., 'cld': 'NC', 'kzz': 0.}}, \
 	'lowz': {'instruments': {}, 'name': 'LowZ models', 'citation': 'Meisner et al. (2021)', 'bibcode': '2021ApJ...915..120M', 'altname': ['meisner','meisner2021','mei21','line21','line2021'], 'default': {'teff': 1000., 'logg': 5.0, 'z': 0., 'kzz': 2., 'co': 0.85}}, \
@@ -4667,7 +4669,7 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 	smdls = copy.deepcopy(models)
 	limits,steps = {},{}
 
-	if debug==True: print('parameters: '.format(par0))
+	if debug==True: print('parameters: {}'.format(par0))
 	if debug==True: print('N models: {}'.format(int(len(smdls))))
 
 	for k in kys:
@@ -4714,6 +4716,7 @@ def getInterpModel(models,par,wave=[],flux_name=DEFAULT_FLUX_NAME,scale=True,def
 # # changed this from downselect to parameter offset 
 # #				print(par[k],np.nanmin(vals),np.nanmax(vals)) 
 			valstep = np.absolute(np.array(vals)-np.roll(vals,1))
+			if debug==True: print(vals,valstep)
 			step = np.nanmedian(valstep[1:])				
 			if par0[k] in vals:
 				# smdls = smdls[smdls[k]==par0[k]]
@@ -5565,16 +5568,17 @@ def fitMCMC(spc,models,p0={},plimits={},constraints={},flux_name=DEFAULT_FLUX_NA
 			plotCompare(spscl,cmdl,outfile=outfile,clabel=label,absolute=absolute,verbose=verbose)
 # plot cornerplot
 			plotpars = copy.deepcopy(mkysfit)
-			for k in plotpars:
+			for k in mkysfit:
+				if k not in list(dpfit.columns): plotpars.remove(k)
 				if isinstance(dpfit.loc[0,k],str): plotpars.remove(k)
-			if absolute==True: plotpars.append('radius')
+			if absolute==True: plotpars.append('radius')			
 			pbest = {}
 			for k in plotpars: pbest[k] = dpfit.loc[np.argmin(dpfit['chis']),k]
 # NOTE: THIS IS ONE OPTION FOR WEIGHTING, COULD TRY OTHERS			
 			weights = np.array(dof/(dof+dpfit['chis']-np.nanmin(dpfit['chis'])))
 			outfile = file_prefix+'_corner.pdf'
-			try: plotCorner(dpfit,plotpars=plotpars,pbest=pbest,weights=weights,outfile=outfile,verbose=verbose)
-			except: print('Warning: had trouble making corner plot')
+			plotCorner(dpfit,plotpars=plotpars,pbest=pbest,weights=weights,outfile=outfile,verbose=verbose)
+#			except: print('Warning: had trouble making corner plot')
 # plot chains
 			plotpars.append('chis')
 			plotpars.append('scale')
@@ -5800,13 +5804,23 @@ def plotCompare(spec,cspec,absolute=False,secondary='diff',
 
 
 # PLOT COMPARISON OF SPECTRUM AND BEST MCMC FIT, ALONG WITH SAMPLING OF CHAIN
-def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',absolute=False,secondary='diff',
-	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',drawalpha=0.3,
+def plotCompareSample(spec,mdl,chain,wave=[],nsample=50,relchi=1.2,method='samples',absolute=False,secondary='diff',
+	olabel='',clabel='Comparison',xlabel='Wavelength',ylabel='Flux',ylabel2='O-C',drawalpha=0.3,instrument='',
 	scale=1.,plot_scale=1.,plot_scale2=-1.,xscale='linear',yscale='linear',yscale2='linear',
 	xlim=None,ylim=None,ylim2=None,xticks=None,yticks=None,yticks2=None,legend_loc=1,fontscale=1,
 	figsize=[8,5],height_ratio=[5,1],outfile='',verbose=ERROR_CHECKING):
 # parameter check
 	if plot_scale2<0: plot_scale2=plot_scale
+	if isinstance(mdl,str):
+		if instrument == '': 
+			try: instrument=spec.instrument
+			except: pass
+		try: models,wave = getModelSet(mdl,instrument)
+		except: raise ValueError('Could not lad in models for set {} and instrument {}'.format(models,instrument))
+	else: models = copy.deepcopy(mdl)
+	if len(wave)==0: wave = spec.wave
+	if len(wave) != len(models.loc[0,'flux']): raise ValueError('Input/spectra wave array has length {} while model wave array has length {}'.format(len(wave),len(models.loc[0,'flux'])))
+
 # set up
 	strue = spec.wave.value[np.isnan(spec.flux.value)==False]
 	wrng = [np.nanmin(strue),np.nanmax(strue)]
@@ -5815,7 +5829,7 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 
 # first identify the best fit model
 	pbest = dict(chain.loc[np.argmin(chain['chis']),:])
-	cspec = getModel(models,pbest,spec.wave)
+	cspec = getModel(models,pbest,wave)
 # scale
 	sspec = copy.deepcopy(spec)
 	sspec.scale(scale)
@@ -5825,7 +5839,14 @@ def plotCompareSample(spec,models,chain,nsample=50,relchi=1.2,method='samples',a
 	chainsub = chain[chain['chis']/np.nanmin(chain['chis'])<relchi]
 	chainsub.reset_index(inplace=True)
 	nsamp = np.nanmin([nsample,len(chainsub)])
-	fluxes = [getModel(models,dict(chainsub.loc[i,:]),sspec.wave).flux.value for i in np.random.randint(0,len(chainsub)-1,nsamp)]
+	fluxes = []
+# fix to deal with errors in drawing particular model parameters	
+	for i in range(nsamp):
+		try: 
+			spar = dict(chainsub.loc[np.random.randint(0,len(chainsub)-1),:])
+			fluxes.append(getModel(models,spar,sspec.wave).flux.value)
+		except: 
+			if verbose==True: print('Problem loading model for parameters {}'.format(spar))
 	fluxes = [f*scale for f in fluxes]
 
 # plot
@@ -5956,7 +5977,6 @@ def plotCorner(dpfit,plotpars=[],pbest={},weights=[],plabels=[],truths=[],quanti
 		else: 
 			try: 
 				dpfit = pandas.DataFrame(par)
-				plotpars = list(dpfit.columns)
 			except: 
 				if verbose==True: print('Cannot process input parameter array')
 				return
@@ -5993,7 +6013,7 @@ def plotCorner(dpfit,plotpars=[],pbest={},weights=[],plabels=[],truths=[],quanti
 	if isinstance(plabels,dict)==True:
 		for k in ppars:
 			if k in list(plabels.keys()): plabs.append(plabels[k])
-			elif k in list(PARAMETER_PLOT_LABELS.keys()): plabs.append(PARAMETER_PLOT_LABELS[k])
+#			elif k in list(PARAMETER_PLOT_LABELS.keys()): plabs.append(PARAMETER_PLOT_LABELS[k])
 			else: plabs.append(k)
 # if given list of labels, just use that
 	if isinstance(plabels,list)==True and len(plabels)==len(ppars): plabs = copy.deepcopy(plabels)
